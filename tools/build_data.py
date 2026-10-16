@@ -25,7 +25,7 @@ OUT_JS = ROOT / "assets" / "js" / "data.js"
 IMG_DIR = ROOT / "assets" / "img"
 
 RU_UP = "АБВГДЕЖ"
-RU_LO = "абвгдеж"
+RU_LO = "абвгдежзи"
 
 
 # ---------------------------------------------------------------- helpers
@@ -205,6 +205,10 @@ def clean_fragment(root, prefix):
         c.extract()
     convert_katex(root)
     fix_styles(root)
+    for svg in root.find_all("svg"):
+        # height="auto" — недопустимое значение атрибута SVG; размер задают стили
+        if svg.get("height") == "auto":
+            del svg["height"]
     uniquify_svg_ids(root, prefix)
     # широкие таблицы прокручиваются внутри своего контейнера
     for t in root.find_all("table"):
@@ -542,7 +546,7 @@ G8_BLOCK_ORDER = ["b-algo", "b-expl", "b-traps", "b-mem", "b-viz", "b-hor"]
 def split_options(p_html):
     """«а) …; б) …; в) ….» → список вариантов."""
     txt = p_html.strip()
-    parts = re.split(r"(?:^|;\s*)([а-ж])\)\s*", txt)
+    parts = re.split(r"(?:^|;\s*)([а-и])\)\s*", txt)
     # parts: ['', 'а', 'текст', 'б', 'текст', ...]
     if parts[0].strip():
         fail("неожиданное начало вариантов: " + txt[:60])
@@ -744,6 +748,375 @@ def build_g8():
     return data, soup
 
 
+
+# ================================================================ 8 класс, 2018/2019
+
+SRC8B = ROOT / "source" / "olimpiada-8-klass-2018-2019.html"
+
+G8B_TESTS = {1: "в", 2: "а", 3: "а", 4: "в", 5: "г", 6: "в", 7: "г", 8: "е", 9: "г", 10: "б",
+             11: "в", 12: "б", 13: "в", 14: "г", 15: "в", 16: "в", 17: "б", 18: "а", 19: "а", 20: "г",
+             21: "а", 23: "в", 24: "а", 25: "а", 26: "д", 27: "д", 28: "б", 29: "г", 30: "а"}
+
+# Ответы, которые сам разбор признаёт допустимыми наравне с основным.
+G8B_ALSO = {
+    10: {"г": "Засчитано. Широкая стрелка на скане задевает и перицикл (корнеродный слой), поэтому такой "
+              "ответ допустим. Но остриё попадает в островок мелких клеток флоэмы, и основной ответ — «б»."},
+}
+G8B_P1 = {"1": "ж", "2": "и", "3": "а", "4": "г", "5": "в", "6": "д"}
+G8B_P2 = {"1": "а", "2": "в", "3": "а", "4": "б", "5": "е", "6": "з", "7": "ж", "8": "г"}
+G8B_P2_ALT = {
+    "3": {"б": "Засчитано: в некоторых ключах у муравья указывают грызуще-лижущий аппарат. "
+                "Основной ответ — грызущий: мощные жвалы муравья грызут и режут."},
+    "5": {"д": "Засчитано, как допускает разбор: псевдотрахеи на хоботке мухи отфильтровывают твёрдые частицы. "
+                "Но основной и школьный ответ — лижущий."},
+}
+G8B_P3_SETS = [["2", "3", "6", "9", "12", "15"], ["2", "3", "6", "8", "12", "15"],
+               ["2", "3", "5", "9", "12", "15"], ["2", "3", "5", "8", "12", "15"]]
+G8B_P3_NOTE = ("Засчитано. Основной ответ: 2, 3, 6, 9, 12, 15. Разбор допускает и «тройчато-раздельный» (5) "
+               "вместо «тройчато-лопастного» (6) и «округлое основание» (8) вместо «сердцевидного» (9).")
+G8B_T4_ITEMS = ["фундук", "миндаль", "пшено", "перловая крупа", "гречневая крупа (ядрица)",
+                "кедровый «орешек»", "манная крупа", "настоящий каштан"]
+G8B_T4_GROUPS = [{"key": "I", "html": "I — настоящий орех"},
+                 {"key": "II", "html": "II — семя или косточка костянки"},
+                 {"key": "III", "html": "III — из зерновки злака или орешка"}]
+G8B_T4 = {"фундук": "I", "миндаль": "II", "пшено": "III", "перловая крупа": "III",
+          "гречневая крупа (ядрица)": "III", "кедровый «орешек»": "II", "манная крупа": "III",
+          "настоящий каштан": "I"}
+
+# Картинки в порядке появления в исходнике → имена файлов на сайте.
+G8B_IMG_NAMES = [
+    "g8b-oblozhka.jpg", "g8b-t08-kletka.jpg", "g8b-t09-spirogira.jpg", "g8b-t10-koren-irisa.png",
+    "g8b-t17-veliger.jpg", "g8b-t18-lichinki.jpg", "g8b-t27-pauk.png", "g8b-p1-kollazh.jpg",
+    "g8b-p1-2.jpg", "g8b-p1-3.jpg", "g8b-p1-4.jpg", "g8b-p1-5.jpg", "g8b-p1-6.png",
+    "g8b-p2-1.jpg", "g8b-p2-2.jpg", "g8b-p2-3.jpg", "g8b-p2-4.jpg", "g8b-p2-5.jpg", "g8b-p2-6.jpg",
+    "g8b-p2-7.jpg", "g8b-p2-8.jpg", "g8b-p3-list.jpg",
+]
+G8B_HEADS = {"3": "b-algo", "4": "b-expl", "5": "b-traps", "6": "b-mem", "7": "b-viz", "8": "b-hor"}
+
+
+def extract_images_g8b(soup):
+    """Сохраняет картинки новой олимпиады. Обложку уменьшаем, чёрно-белые схемы
+    переводим в оттенки серого (содержимое не меняется, файл легче)."""
+    imgs = soup.find_all("img")
+    if len(imgs) != len(G8B_IMG_NAMES):
+        fail(f"ожидалось {len(G8B_IMG_NAMES)} картинок в олимпиаде 2018/2019, найдено {len(imgs)}")
+    IMG_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        from PIL import Image
+    except ImportError:
+        Image = None
+    import io
+    for img, name in zip(imgs, G8B_IMG_NAMES):
+        m = re.match(r"data:image/(\w+);base64,(.*)", img["src"], re.S)
+        raw = base64.b64decode(m.group(2))
+        out = IMG_DIR / name
+        if Image is not None:
+            im = Image.open(io.BytesIO(raw))
+            if name == "g8b-oblozhka.jpg":
+                im = im.convert("RGB")
+                im.thumbnail((1100, 1100))
+                im.save(out, "JPEG", quality=82, optimize=True, progressive=True)
+            elif name in ("g8b-t10-koren-irisa.png", "g8b-t27-pauk.png"):
+                im.convert("L").save(out, "PNG", optimize=True)
+            elif name.endswith(".jpg") and m.group(1) in ("jpeg", "jpg"):
+                out.write_bytes(raw)
+            elif name.endswith(".png") and m.group(1) == "png":
+                out.write_bytes(raw)
+            else:
+                im.convert("RGB").save(out, "JPEG", quality=88)
+            if name == "g8b-p1-kollazh.jpg":
+                # Иллюстрация 1 бланка — левый верхний кадр коллажа (мульчирование)
+                crop = Image.open(io.BytesIO(raw)).convert("RGB").crop((0, 0, 132, 76))
+                crop.resize((264, 152), Image.LANCZOS).save(IMG_DIR / "g8b-p1-1.jpg", "JPEG", quality=90)
+        else:
+            out.write_bytes(raw)
+        img["src"] = "assets/img/" + name
+        img["loading"] = "lazy"
+        img["decoding"] = "async"
+        if "style" in img.attrs:
+            del img["style"]
+
+
+def entry_parts(entry):
+    """Раздел задания → {номер шага: (заголовок, html)}; шаги 1–8 из разбора."""
+    parts, cur, buf, title = {}, None, [], None
+    for ch in entry.children:
+        if isinstance(ch, Tag) and ch.name in ("h3", "h4"):
+            if cur:
+                parts[cur] = (title, "".join(str(x) for x in buf))
+            t = text_of(ch)
+            mm = re.match(r"(\d)\.\s*(.*)", t)
+            cur, title = (mm.group(1), mm.group(2)) if mm else (None, None)
+            buf = []
+            continue
+        if isinstance(ch, Tag) and ch.name == "h2":
+            continue
+        if cur:
+            buf.append(ch)
+    if cur:
+        parts[cur] = (title, "".join(str(x) for x in buf))
+    return parts
+
+
+def blocks_html(parts):
+    out = []
+    for num in ("3", "4", "5", "6", "7", "8"):
+        if num not in parts:
+            continue
+        title, html_ = parts[num]
+        out.append(f'<div class="blk {G8B_HEADS[num]}"><div class="bl"><span class="bn">{num}</span>{html.escape(title)}</div>'
+                   f'<div class="bb">{html_}</div></div>')
+    return "".join(out)
+
+
+def strip_answer_label(h):
+    return re.sub(r"Эталонный ответ(?:\s*\([^)]*\))?:\s*", "", h, count=1).strip()
+
+
+def build_g8b():
+    raw = SRC8B.read_text(encoding="utf-8")
+    soup = BeautifulSoup(raw, "lxml")
+    for sc in soup.find_all("script"):
+        sc.decompose()
+    extract_images_g8b(soup)
+    data = {
+        "id": "g8b", "grade": 8, "year": "2018/2019", "stage": "Олимпиада",
+        "title": "Олимпиада 8 класса, 2018/2019",
+        "subtitle": "Олимпиада · 2018/2019 · 29 тестов и 3 практических задания",
+        "sections": [], "notes": [],
+    }
+    sections = [
+        {"id": "g8b-test", "title": "Тестовая часть (№ 1–30, номера 22 в бланке нет)", "short": "Тесты 1–30", "questions": []},
+        {"id": "g8b-pract", "title": "Практическая часть", "short": "Практика", "questions": []},
+        {"id": "g8b-train", "title": "Бонус · Тренажёр на перенос знаний", "short": "Бонус · тренажёр", "questions": []},
+    ]
+    sec = {x["id"]: x for x in sections}
+
+    for entry in soup.select("section.entry"):
+        tid = entry["id"]
+        qid = "g8b-" + tid
+        parts = entry_parts(entry)
+        cond = entry.select_one(".condition-block")
+        topic = re.sub(r"^(?:Практическое )?[Зз]адание \d+:\s*", "", text_of(entry.find("h2")))
+        ans_html = strip_answer_label(parts["2"][1])
+        ef = frag(blocks_html(parts), qid + "e")
+        mark_option_rows(ef)
+        if tid == "task-1":
+            for tx in ef.find_all("text", attrs={"y": "206"}):
+                name, _, rest = tx.get_text().partition(" (")
+                x = tx["x"]
+                tx.clear()
+                l1 = ef.new_tag("tspan", attrs={"x": x, "y": "200"}); l1.string = name
+                l2 = ef.new_tag("tspan", attrs={"x": x, "y": "214"}); l2.string = "(" + rest
+                tx.append(l1); tx.append(l2)
+        q = {"id": qid, "src": "g8b", "topic": topic, "media": "",
+             "explanation": str(ef).strip(), "answerHtml": str(frag(ans_html, qid + "a")).strip()}
+        first = cond.find("p")
+        title_txt = text_of(cond)
+        if title_txt.startswith("Практическая часть") or "Практическая часть" in text_of(first):
+            ps = cond.find_all("p", recursive=False)
+            pnum = re.search(r"Задание (\d)", text_of(ps[0])).group(1)
+            stem_html = re.sub(r"^\s*<strong>\d\.\s*", "<strong>", inner(ps[1]))
+            stem_html = re.sub(r"^<strong>(.*)</strong>$", r"\1", stem_html.strip(), flags=re.S)
+            q.update(num="П" + pnum, head=f"Практическая часть · задание {pnum}", stem=stem_html)
+            if pnum == "1":
+                opts = split_options(inner(ps[2]))
+                note = ps[-1]
+                q.update(type="match", left=[{"key": str(i), "html": f'<img src="assets/img/g8b-p1-{i}.{"png" if i == 6 else "jpg"}" alt="Иллюстрация {i}" loading="lazy"><span>Иллюстрация {i}</span>'} for i in range(1, 7)],
+                         right=opts, leftTitle="Иллюстрация", rightTitle="Агротехнический приём (три лишних)",
+                         hideLeftKey=True, answer=G8B_P1, imgRows=True,
+                         instructions="Для каждой иллюстрации выбери приём. Нажми на картинку, чтобы увеличить.")
+                q["media"] = str(frag(str(note).replace("<p>", '<p class="cond-note">', 1), qid + "m"))
+                # исходный коллаж бланка остаётся в разборе
+                coll = '<figure><img src="assets/img/g8b-p1-kollazh.jpg" alt="Коллаж из бланка" loading="lazy"><figcaption>Исходный коллаж из бланка (рисунки 1–5). Под рисунком 2 на нём видна пикировка, поверх был наложен рисунок пасынкования; рисунок 6 в PDF сместился наверх.</figcaption></figure>'
+                q["explanation"] = coll + q["explanation"]
+            elif pnum == "2":
+                opts = split_options(re.sub(r"\s*\(8 баллов\)\s*$", "", inner(ps[2])))
+                names = [text_of(th) for t in cond.find_all("table") for th in t.find_all("th")]
+                imgs = [im for t in cond.find_all("table") for im in t.find_all("img")]
+                left = []
+                for i, (nm, im) in enumerate(zip(names, imgs)):
+                    mm = re.match(r"(\d)\s*\((.*)\)", nm)
+                    left.append({"key": mm.group(1), "html": f'{str(im)}<span>{mm.group(1)}. {html.escape(mm.group(2))}</span>'})
+                q.update(type="match", left=left, right=opts, leftTitle="Насекомое", rightTitle="Тип ротового аппарата",
+                         hideLeftKey=True, answer=G8B_P2, altAnswers=G8B_P2_ALT, imgRows=True,
+                         instructions="Для каждого насекомого выбери тип ротового аппарата.")
+            else:
+                items = [inner(li) for li in cond.select("ol > li")]
+                fig = cond.find("figure")
+                q.update(type="multi", options=[{"key": str(i + 1), "html": h} for i, h in enumerate(items)],
+                         answer=G8B_P3_SETS[0], acceptSets=G8B_P3_SETS, setNote=G8B_P3_NOTE,
+                         instructions="Отметь все признаки, которые подходят листу на фотографии.")
+                q["media"] = str(frag(str(fig), qid + "m"))
+            sec["g8b-pract"]["questions"].append(q)
+            continue
+
+        # тестовая часть
+        ps = cond.find_all("p", recursive=False)
+        stem_p = next(p_ for p_ in ps if p_.find("strong") and re.match(r"\s*\d+\.", p_.get_text()))
+        n = int(re.match(r"\s*(\d+)\.", stem_p.get_text()).group(1))
+        stem = re.sub(r"^\s*<strong>\s*\d+\.\s*", "<strong>", inner(stem_p))
+        stem = re.sub(r"^<strong>(.*)</strong>$", r"\1", stem.strip(), flags=re.S)
+        opts = []
+        for li in cond.select("ul > li"):
+            mm = re.match(r"\s*([а-ж])\)\s*(.*)", li.get_text(" ", strip=True), re.S)
+            body = re.sub(r"^\s*[а-ж]\)\s*", "", inner(li))
+            opts.append({"key": mm.group(1), "html": re.sub(r"[;.]\s*$", "", body).strip()})
+        letters = "".join(o["key"] for o in opts)
+        if letters != RU_LO[:len(letters)]:
+            fail(f"тест {n}: варианты не по порядку ({letters})")
+        stmts = []
+        notes = []
+        for p_ in ps:
+            if p_ is stem_p:
+                continue
+            t = p_.get_text(" ", strip=True)
+            if re.match(r"\s*1\s*[)–-]", t):
+                for mm in re.finditer(r"(\d+)\s*[)–-]\s*([^;]+?)(?:;|\.?$)", t):
+                    stmts.append({"key": mm.group(1), "html": html.escape(mm.group(2).strip())})
+            else:
+                notes.append(str(p_).replace("<p>", '<p class="cond-note">', 1))
+        media = notes + [str(f) for f in cond.find_all("figure")]
+        q.update(num=str(n), head=f"Тест {n}", type="single", stem=stem, options=opts, answer=G8B_TESTS[n])
+        if stmts:
+            q["statements"] = stmts
+        if n in G8B_ALSO:
+            q["alsoAccept"] = G8B_ALSO[n]
+        if media:
+            q["media"] = str(frag("".join(media), qid + "m"))
+        sec["g8b-test"]["questions"].append(q)
+
+    # --- итоговый блок
+    sb = soup.select_one("#summary-block")
+    h3s = sb.find_all("h3")
+
+    def after(h):
+        buf = []
+        for sib in h.next_siblings:
+            if isinstance(sib, Tag) and sib.name == "h3":
+                break
+            buf.append(sib)
+        return buf
+
+    cheat = "".join(str(x) for x in after(h3s[0]))
+    dict_nodes = after(h3s[1])
+    card_nodes = after(h3s[2])
+    train_nodes = after(h3s[3])
+    dict_html = "".join(str(x) for x in dict_nodes)
+    cards_html = "".join(str(x) for x in card_nodes)
+
+    cards = []
+    for tr in BeautifulSoup(cards_html, "html.parser").select("tbody tr"):
+        tds = tr.find_all("td")
+        cards.append({"front": inner(tds[1]), "back": inner(tds[2])})
+    dict_cards = []
+    for tr in BeautifulSoup(dict_html, "html.parser").select("tbody tr"):
+        tds = tr.find_all("td")
+        dict_cards.append({"front": inner(tds[0]), "back": inner(tds[1]) + " — " + inner(tds[2])})
+
+    # тренажёр: задачи 1–3 — открытые (сверка с ключом), задача 4 — распределение по группам
+    tasks = [x for x in train_nodes if isinstance(x, Tag) and x.name == "p" and re.match(r"\s*Задача \d", x.get_text())]
+    keys_ul = next(x for x in train_nodes if isinstance(x, Tag) and x.name == "ul")
+    keys = keys_ul.find_all("li", recursive=False)
+    if len(tasks) != 4 or len(keys) != 4:
+        fail("тренажёр 2018/2019: ожидалось 4 задачи и 4 ключа")
+    for i, (tp, key) in enumerate(zip(tasks, keys)):
+        strong = tp.find("strong")
+        head = re.sub(r"^Задача \d+\s*\((.*)\):?$", r"\1", text_of(strong)).split(" — ")[0]
+        strong.extract()
+        br = tp.find("br")
+        if br:
+            br.extract()
+        body = inner(tp).strip()
+        key_html = re.sub(r"^\s*<strong>Ключ к Задаче \d:</strong>\s*", "", inner(key))
+        key_html = re.sub(r"\s+(<strong>(?:[бвг]\)|Группа II|Группа III))", r"<br>\1", key_html)
+        q = {"id": f"g8b-t{i + 1}", "src": "g8b", "num": str(i + 1), "head": head, "media": "",
+             "stem": body, "explanation": "", "answerHtml": str(frag(key_html, f"g8b-t{i + 1}a")).strip()}
+        if i < 3:
+            q.update(type="open")
+        else:
+            q.update(type="match", style="segmented", left=[{"key": x, "html": html.escape(x)} for x in G8B_T4_ITEMS],
+                     right=G8B_T4_GROUPS, answer=G8B_T4, leftTitle="Продукт", rightTitle="Группа",
+                     stem="Распредели продукты по трём группам: чем каждый из них является с точки зрения ботаники.",
+                     note=body)
+        sec["g8b-train"]["questions"].append(q)
+
+    # --- памятки
+    hero = soup.select_one(".hero-banner")
+    cover = hero.find("img")
+    data["notes"] = [
+        {"id": "g8b-about", "title": "Об этой олимпиаде",
+         "html": str(frag(f'<figure>{str(cover)}</figure><h3>{html.escape(text_of(hero.find("h1")))}</h3>'
+                          f'<p>{inner(hero.find("p"))}</p>'
+                          '<p>Каждое задание разобрано по шагам: алгоритм олимпиадного мышления, послойное объяснение '
+                          'с разбором всех вариантов, типичные ошибки и ловушки, приёмы запоминания, схема и олимпиадный горизонт.</p>', "g8bn0"))},
+        {"id": "g8b-cheat", "title": "Экспресс-шпаргалка и ответы", "spoiler": True, "html": str(frag(cheat, "g8bn1"))},
+        {"id": "g8b-dict", "title": "Словарь корней", "html": str(frag(dict_html, "g8bn2"))},
+        {"id": "g8b-cards", "title": "Карточки (таблица)", "html": str(frag(cards_html, "g8bn3"))},
+    ]
+    data["cards"] = cards
+    data["dictCards"] = dict_cards
+    data["sections"] = sections
+    return data, soup
+
+
+def verify_g8b(o, soup):
+    problems = []
+    tests = o["sections"][0]["questions"]
+    if [int(q["num"]) for q in tests] != sorted(G8B_TESTS):
+        problems.append("2018/2019: номера тестов не совпадают с ключом")
+    for q in tests:
+        at = BeautifulSoup(q["answerHtml"], "html.parser").get_text(" ", strip=True)
+        if not at.startswith(q["answer"] + ")"):
+            problems.append(f"{q['id']} (тест {q['num']}): эталон «{at[:40]}» ≠ ключ {q['answer']}")
+        if q["answer"] not in [x["key"] for x in q["options"]]:
+            problems.append(f"{q['id']}: ответа нет среди вариантов")
+        for k in q.get("alsoAccept", {}):
+            if not re.search(r"или\s+" + k + r"\)", at):
+                problems.append(f"{q['id']}: дополнительный ответ {k} не упомянут в эталоне")
+        if q.get("statements"):
+            opt = next(x for x in q["options"] if x["key"] == q["answer"])
+            nums = re.findall(r"\d+", BeautifulSoup(opt["html"], "html.parser").get_text())
+            if not all(n in [s_["key"] for s_ in q["statements"]] for n in nums):
+                problems.append(f"{q['id']}: вариант ссылается на несуществующий пункт")
+    # сверка с экспресс-шпаргалкой (отдельная таблица ответов в том же файле)
+    sb = soup.select_one("#summary-block table")
+    sheet = {}
+    for tr in sb.select("tbody tr"):
+        tds = tr.find_all("td")
+        mm = re.match(r"Тест №(\d+)", tds[0].get_text(strip=True))
+        if mm:
+            sheet[int(mm.group(1))] = tds[2].get_text(" ", strip=True)
+    for q in tests:
+        n = int(q["num"])
+        if n not in sheet or not sheet[n].startswith(q["answer"] + ")"):
+            problems.append(f"тест {n}: в шпаргалке «{sheet.get(n, '—')[:30]}», в ключе {q['answer']}")
+    pr = o["sections"][1]["questions"]
+    a1 = BeautifulSoup(pr[0]["answerHtml"], "html.parser").get_text(" ", strip=True)
+    if dict(re.findall(r"(\d) — ([а-и])\)", a1)) != G8B_P1:
+        problems.append("практика 1: ключ не совпадает с эталоном")
+    a2 = BeautifulSoup(pr[1]["answerHtml"], "html.parser").get_text(" ", strip=True)
+    if dict(re.findall(r"(\d) \([^)]*\) — ([а-з])\)", a2)) != G8B_P2:
+        problems.append("практика 2: ключ не совпадает с эталоном " + str(re.findall(r"(\d) \([^)]*\) — ([а-з])\)", a2)))
+    for row, alts in G8B_P2_ALT.items():
+        for k in alts:
+            if not re.search(r"или[^)]*?" + k + r"\)", a2):
+                problems.append(f"практика 2: альтернатива {row}–{k} не упомянута в эталоне")
+    a3 = BeautifulSoup(pr[2]["answerHtml"], "html.parser").get_text(" ", strip=True)
+    if not a3.startswith("2, 3, 6, 9 (или 8), 12, 15") or "5 — тройчато-раздельный" not in a3:
+        problems.append("практика 3: эталон изменился: " + a3[:60])
+    tr = o["sections"][2]["questions"][3]
+    at = BeautifulSoup(tr["answerHtml"], "html.parser").get_text(" ", strip=True)
+    groups = {"I": re.search(r"Группа I \(.*?\):(.*?)Группа II", at).group(1),
+              "II": re.search(r"Группа II \(.*?\):(.*?)Группа III", at).group(1),
+              "III": re.search(r"Группа III \(.*?\):(.*)$", at).group(1)}
+    for i, item in enumerate(G8B_T4_ITEMS):
+        g = G8B_T4[item]
+        if f"{i + 1})" not in groups[g]:
+            problems.append(f"тренажёр 4: «{item}» в эталоне не в группе {g}")
+    return problems
+
+
 # ================================================================ проверка
 
 def verify(g7, s7, g8, s8):
@@ -869,16 +1242,17 @@ def normalize(s):
 def main():
     g7, s7 = build_g7()
     g8, s8 = build_g8()
-    problems = verify(g7, s7, g8, s8)
+    g8b, s8b = build_g8b()
+    problems = verify(g7, s7, g8, s8) + verify_g8b(g8b, s8b)
     if problems:
         print("\n".join(problems), file=sys.stderr)
         fail(f"проверка ключей не пройдена ({len(problems)})")
-    payload = {"olympiads": [g7, g8]}
+    payload = {"olympiads": [g7, g8, g8b]}
     js = ("/* Сгенерировано tools/build_data.py из файлов в source/. Не редактировать вручную. */\n"
           "window.OLYMPIAD_DATA = " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ";\n")
     OUT_JS.parent.mkdir(parents=True, exist_ok=True)
     OUT_JS.write_text(js, encoding="utf-8")
-    nq = sum(len(s["questions"]) for o in (g7, g8) for s in o["sections"])
+    nq = sum(len(s["questions"]) for o in (g7, g8, g8b) for s in o["sections"])
     print(f"Готово: {OUT_JS.relative_to(ROOT)}; вопросов: {nq}, {len(js) // 1024} КБ; ключи сверены.")
 
 

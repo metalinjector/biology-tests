@@ -93,6 +93,11 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
             await page.selectOption(`select[data-row="${r}"][data-col="${c}"]`, { label: q.answer[r][c] });
           }
           break;
+        case 'open': // открытый вопрос: ключ без штрафа, затем самооценка
+          await page.click('#check-btn');
+          await page.waitForSelector('.drawer.is-open .answer-card');
+          if (!(await page.locator('[data-act="self"][data-val="ok"]').count())) fail(`${q.id}: нет кнопок самооценки`);
+          break;
         default: fail('неизвестный тип ' + q.type);
       }
       await page.click('#check-btn');
@@ -101,7 +106,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
       const st = await page.locator('.slide-stars span:not(.off)').count();
       if (st !== 3) fail(`${q.id}: ожидалось 3 звезды, а их ${st}`);
       // разбор: правильный ответ + все рисунки
-      await page.click('.drawer-head');
+      if (!(await page.locator('.drawer.is-open').count())) await page.click('.drawer-head');
       await page.waitForSelector('.drawer.is-open .answer-card');
       const svgs = await page.locator('#drawer-inner .expl svg').count();
       if (svgs !== q.svg) fail(`${q.id}: в разборе ${svgs} рисунков вместо ${q.svg}`);
@@ -178,7 +183,8 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
 // --------------------------------------------------------------- 3. телефон, тёмная тема, карточки, памятки
 {
   const { page } = await newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: 'dark' });
-  const routes = ['', '#g7-q1', '#g7-q22', '#g7-q34', '#g7-q35', '#g8-q2', '#g8-q25', '#g8-q26', '#g7-pamyatki', '#g8-pamyatki', '#kartochki-self', '#g8-itogi'];
+  const routes = ['', '#g7-q1', '#g7-q22', '#g7-q34', '#g7-q35', '#g8-q2', '#g8-q25', '#g8-q26', '#g7-pamyatki', '#g8-pamyatki', '#kartochki-self', '#g8-itogi',
+    '#g8b-q10', '#g8b-q15', '#g8b-q30', '#g8b-q31', '#g8b-q32', '#g8b-q33', '#g8b-q36', '#g8b-pamyatki'];
   for (const r of routes) {
     await page.goto(URL.replace(/#.*/, '') + r);
     await page.reload();
@@ -186,7 +192,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
     await page.waitForTimeout(150);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (over > 1) fail(`горизонтальная прокрутка на телефоне (${r || 'главная'}): +${over}px`);
-    if (r === '' || r === '#g8-q25' || r === '#g7-q34') await shot(page, 'mobile-dark' + (r || '-home').replace('#', '-'));
+    if (['', '#g8-q25', '#g7-q34', '#g8b-q31', '#g8b-q33'].includes(r)) await shot(page, 'mobile-dark' + (r || '-home').replace('#', '-'));
   }
   // открыть разбор 8 класса на телефоне
   await page.goto(URL.replace(/#.*/, '') + '#g8-q3');
@@ -332,6 +338,61 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   await page.click('label.switch');
   await page.waitForSelector('.drawer-head[aria-disabled="true"]');
   await shot(page, 'peek-off');
+}
+
+// --------------------------------------------------------------- 7. олимпиада 2018/2019: допустимые ответы, открытые задачи
+{
+  const { page } = await newPage();
+  const go = async (h) => { await page.goto(URL.replace(/#.*/, '') + h); await page.reload(); await page.waitForSelector('main'); };
+  await go('#g8b-q10'); // тест 10: основной ответ «б», разбор допускает и «г»
+  await page.click('.opt[data-key="г"] .opt-card'); await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  if (!/Засчитано/.test(await page.textContent('.feedback'))) fail('тест 10: нет пояснения к допустимому ответу «г»');
+  if (!(await page.locator('.opt.is-missed[data-key="б"]').count())) fail('тест 10: не показан основной ответ «б»');
+  await go('#g8b-q10');
+  await page.click('[data-act="retry"]');
+  await page.click('.opt[data-key="а"] .opt-card'); await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-bad');
+
+  await go('#g8b-q31'); // практика 2: муравей — «б», муха — «д» тоже засчитываются
+  const p2 = { 1: 'а', 2: 'в', 3: 'б', 4: 'б', 5: 'д', 6: 'з', 7: 'ж', 8: 'г' };
+  for (const [k, v] of Object.entries(p2)) await page.selectOption(`select[data-row="${k}"]`, v);
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  if ((await page.locator('.feedback li').count()) !== 2) fail('практика 2: ожидалось два пояснения к допустимым ответам');
+  if ((await page.locator('.match-left img').count()) !== 8) fail('практика 2: в строках должно быть 8 картинок');
+
+  await go('#g8b-q32'); // практика 3: вариант с 5 и 8 вместо 6 и 9
+  for (const k of ['2', '3', '5', '8', '12', '15']) await page.click(`.opt[data-key="${k}"] .opt-card`);
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  await go('#g8b-q32');
+  await page.click('[data-act="retry"]');
+  for (const k of ['2', '3', '6', '9', '12', '15', '1']) await page.click(`.opt[data-key="${k}"] .opt-card`);
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-bad');
+  if (!/Верно отмечено 6 из 6\. Лишних отметок: 1/.test(await page.textContent('.feedback'))) fail('практика 3: неверный подсчёт: ' + await page.textContent('.feedback'));
+
+  await go('#g8b-q30'); // практика 1: шесть иллюстраций
+  if ((await page.locator('.match-left img').count()) !== 6) fail('практика 1: должно быть 6 иллюстраций');
+  const broken = await page.$$eval('.match-left img', (ims) => ims.filter((im) => !(im.complete && im.naturalWidth > 40)).length);
+  if (broken) fail('практика 1: не загрузились картинки: ' + broken);
+
+  await go('#g8b-q34'); // открытая задача: «Были ошибки» → без звёзд
+  await page.fill('textarea.open-draft', 'черновик ответа');
+  await page.click('#check-btn');
+  await page.waitForSelector('.drawer.is-open .answer-card');
+  await page.click('[data-act="self"][data-val="bad"]');
+  await page.waitForSelector('.feedback.fb-info');
+  if (await page.locator('.slide-stars span:not(.off)').count()) fail('открытая задача: после «Были ошибки» не должно быть звёзд');
+  if ((await page.inputValue('textarea.open-draft')) !== 'черновик ответа') fail('открытая задача: черновик не сохранился');
+
+  await go('#kartochki-self');
+  if (!/Самопроверка · 20/.test(await page.textContent('.deck-bar'))) fail('в колоде самопроверки должно быть 20 карточек');
+  await go('#g8b-pamyatki');
+  if ((await page.locator('.tab').count()) !== 4) fail('у олимпиады 2018/2019 должно быть 4 памятки');
+  await page.click('.tab:has-text("Об этой олимпиаде")');
+  if (!(await page.$eval('#note-panel img', (im) => im.complete && im.naturalWidth > 100))) fail('не загрузилась обложка олимпиады');
 }
 
 await browser.close();

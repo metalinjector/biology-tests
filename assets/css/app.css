@@ -215,7 +215,7 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .eyepiece figcaption { font-family: var(--font-mono); font-size: .74rem; letter-spacing: .04em; color: var(--muted); text-align: center; }
 
 .section-title { font-family: var(--font-display); font-weight: 800; font-size: var(--step-2); margin: 28px 0 14px; letter-spacing: -.01em; }
-.olymp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+.olymp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 18px; }
 .olymp-card {
   display: grid; grid-template-rows: auto 1fr auto; gap: 0;
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden;
@@ -557,6 +557,8 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .answer-card > span { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ok); font-weight: 600; }
 .answer-card .ans-body { font-weight: 600; font-size: 1.08rem; }
 .answer-card .ans-body p { margin: 0 0 .4em; }
+.answer-card .ans-body.is-long { font-weight: 400; font-size: 1rem; line-height: 1.6; }
+.answer-card .ans-body.is-long strong { font-weight: 650; }
 .answer-card .ans-body p:last-child { margin: 0; }
 .answer-card .table-wrap { margin: 4px 0 0; background: var(--surface); }
 .answer-card .ans-body table { font-weight: 400; font-size: .92rem; }
@@ -614,7 +616,8 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .expl figure img, .prose figure img { background: var(--plate); border: 1px solid var(--plate-line); border-radius: 12px; padding: 8px; max-height: 520px; width: auto; }
 .expl figcaption, .expl .cap, .prose figcaption, .prose .cap { font-size: .9rem; color: var(--muted); text-align: center; font-style: italic; max-width: 46em; justify-self: center; }
 .src-g7 svg text { font-family: "Tinos", "Liberation Serif", "Times New Roman", serif; }
-.src-g8 svg { font-family: var(--font-body); }
+.src-g8 svg, .src-g8b svg { font-family: var(--font-body); }
+.src-g8b svg text { font-family: "Noto Sans", var(--font-body); }
 .svgwrap { display: grid; justify-items: center; }
 .svgwrap + .cap { margin-top: 6px; }
 
@@ -633,8 +636,8 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .b-hor { --blk-c: var(--c-teal); }
 .src-g8 span.ok { color: var(--ok); font-weight: 700; }
 .src-g8 span.no { color: var(--bad); font-weight: 700; }
-.src-g8 li.is-picked { padding: 4px 8px; margin-left: -8px; border-radius: 8px; background: var(--bad-tint); }
-.src-g8 li.is-picked::before { content: "твой выбор · "; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }
+.src-g8 li.is-picked, .src-g8b li.is-picked { padding: 4px 8px; margin-left: -8px; border-radius: 8px; background: var(--bad-tint); }
+.src-g8 li.is-picked::before, .src-g8b li.is-picked::before { content: "твой выбор · "; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }
 .rule { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: color-mix(in oklab, var(--c-orange) 16%, var(--surface)); border: 1.5px solid var(--c-orange); font-weight: 600; }
 .rule p { margin: 0; }
 .rule-ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--c-orange); color: var(--surface); font-weight: 800; }
@@ -740,3 +743,24 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
+
+/* ------------------------------------------------------------------ олимпиада 2018/2019 */
+.math { font-family: var(--font-body); font-style: italic; white-space: nowrap; }
+.expl code, .prose code, .answer-card code { font-family: var(--font-mono); font-size: .88em; padding: 1px 6px; border-radius: 5px; background: var(--surface-2); border: 1px solid var(--line); }
+.prose figure img { max-width: 100%; max-height: 420px; }
+
+/* соответствие с картинками в строках */
+.match-img .match-left { grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 6px; }
+.match-img .match-left img {
+  display: block; width: auto; max-width: min(100%, 240px); max-height: 170px; height: auto; cursor: zoom-in;
+  background: var(--plate); border: 1px solid var(--plate-line); border-radius: 10px; padding: 4px;
+}
+.match-img .match-left span { font-weight: 600; }
+
+/* открытый вопрос */
+.open-label { font-size: var(--step--1); color: var(--muted); margin-bottom: -10px; }
+.open-draft {
+  width: 100%; min-height: 120px; resize: vertical; padding: 12px 14px; border-radius: 12px;
+  border: 1.5px solid var(--line); background: var(--surface-2); font-size: 1rem; line-height: 1.5;
+}
+.open-draft:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 25%, transparent); }

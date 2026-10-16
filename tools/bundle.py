@@ -25,8 +25,9 @@ def inline_images(text):
     def repl(m):
         path = ROOT / m.group(0)
         b64 = base64.b64encode(path.read_bytes()).decode("ascii")
-        return "data:image/png;base64," + b64
-    return re.sub(r"assets/img/[\w.-]+\.png", repl, text)
+        mime = "image/png" if path.suffix == ".png" else "image/jpeg"
+        return f"data:{mime};base64," + b64
+    return re.sub(r"assets/img/[\w.-]+\.(?:png|jpe?g)", repl, text)
 
 
 def script(js):

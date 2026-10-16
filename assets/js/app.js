@@ -13,7 +13,7 @@
   for (const o of OLY) {
     o.flat = [];
     o.sections.forEach((s) => {
-      s.bonus = s.id === 'g8-train';
+      s.bonus = /-train$/.test(s.id);
       s.questions.forEach((q) => { q.sec = s; q.olymp = o; q.index = o.flat.length; o.flat.push(q); });
     });
     o.main = o.flat.filter((q) => !q.sec.bonus);
@@ -178,10 +178,11 @@
   function parseToken(t) {
     t = (t || '').replace(/^#/, '');
     let m;
-    if ((m = t.match(/^(g7|g8)-q(\d+)$/))) return { screen: 'quiz', oid: m[1], idx: Math.max(0, +m[2] - 1) };
-    if ((m = t.match(/^(g7|g8)$/))) return { screen: 'quiz', oid: m[1], idx: store.last[m[1]] || 0 };
-    if ((m = t.match(/^(g7|g8)-itogi$/))) return { screen: 'results', oid: m[1] };
-    if ((m = t.match(/^(g7|g8)-pamyatki$/))) return { screen: 'notes', oid: m[1] };
+    const known = (id) => OLY.some((o) => o.id === id);
+    if ((m = t.match(/^([a-z0-9]+)-q(\d+)$/)) && known(m[1])) return { screen: 'quiz', oid: m[1], idx: Math.max(0, +m[2] - 1) };
+    if ((m = t.match(/^([a-z0-9]+)$/)) && known(m[1])) return { screen: 'quiz', oid: m[1], idx: store.last[m[1]] || 0 };
+    if ((m = t.match(/^([a-z0-9]+)-itogi$/)) && known(m[1])) return { screen: 'results', oid: m[1] };
+    if ((m = t.match(/^([a-z0-9]+)-pamyatki$/)) && known(m[1])) return { screen: 'notes', oid: m[1] };
     if ((m = t.match(/^kartochki-(self|dict)$/))) return { screen: 'cards', deck: m[1] };
     return { screen: 'home' };
   }
@@ -206,6 +207,7 @@
   window.addEventListener('popstate', () => go(parseToken(location.hash), { push: false }));
 
   const olymp = () => OLY.find((o) => o.id === view.oid);
+  const olabel = (o) => `${o.grade} класс · ${o.year}`;
 
   // ------------------------------------------------------------ шапка
   function topbar(extra = '') {
@@ -283,13 +285,14 @@
       </article>`;
     }).join('');
 
-    const g8 = OLY.find((o) => o.id === 'g8');
+    const noteBlurb = { g7: ['Главные ловушки', 'Памятки, ключ ответов и правила разбора'], g8: ['Шпаргалка и словарь', 'Экспресс-шпаргалка, словарь корней, ключ'], g8b: ['Шпаргалка и словарь', 'Шпаргалка с ответами, словарь корней, карточки'] };
+    const noteExtras = OLY.map((o) => { const [b, t] = noteBlurb[o.id] || ['Памятки', 'Шпаргалка и ключ']; return `<button class="extra" data-act="notes" data-oid="${o.id}"><span class="tag">${esc(olabel(o))}</span><b>${b}</b><span>${t}</span></button>`; }).join('');
     app.innerHTML = topbar() + `<main class="wrap-wide${enterCls()}">
       <section class="hero">
         <div>
           <p class="eyebrow">Тренажёр по олимпиадам · биология <span style="white-space:nowrap">7–8 класс</span></p>
           <h1>Олимпиада <em>под&nbsp;микроскопом</em></h1>
-          <p class="hero-lead">Настоящие задания городского и школьного этапов. Отвечай сама, а если ошибёшься — тренажёр подскажет, и можно раскрыть подробный разбор с рисунками, ловушками и приёмами запоминания.</p>
+          <p class="hero-lead">Настоящие задания трёх олимпиад для 7–8 класса. Отвечай сама, а если ошибёшься — тренажёр подскажет, и можно раскрыть подробный разбор с рисунками, ловушками и приёмами запоминания.</p>
           <div class="hero-stats">
             <span class="chip-stat"><b>${doneQ}</b> из ${totalQ} заданий решено</span>
             <span class="chip-stat"><span class="star" style="display:inline-flex;width:16px;align-self:center">${I.star}</span><b>${allStars()}</b> звёзд собрано</span>
@@ -311,20 +314,19 @@
 
       <h2 class="section-title">Повторить и запомнить</h2>
       <div class="extras">
-        <button class="extra" data-act="cards" data-deck="self"><span class="tag">карточки</span><b>Самопроверка</b><span>${g8.cards.length} вопросов-карточек: переверни и проверь себя</span></button>
-        <button class="extra" data-act="cards" data-deck="dict"><span class="tag">карточки</span><b>Корни терминов</b><span>${g8.dictCards.length} терминов: откуда слово и что значит</span></button>
-        <button class="extra" data-act="notes" data-oid="g7"><span class="tag">7 класс</span><b>Главные ловушки</b><span>Памятки, ключ ответов и правила разбора</span></button>
-        <button class="extra" data-act="notes" data-oid="g8"><span class="tag">8 класс</span><b>Шпаргалка и словарь</b><span>Экспресс-шпаргалка, словарь корней, ключ</span></button>
+        <button class="extra" data-act="cards" data-deck="self"><span class="tag">карточки</span><b>Самопроверка</b><span>${deckCards('self').length} вопросов-карточек: переверни и проверь себя</span></button>
+        <button class="extra" data-act="cards" data-deck="dict"><span class="tag">карточки</span><b>Корни терминов</b><span>${deckCards('dict').length} терминов: откуда слово и что значит</span></button>
+        ${noteExtras}
       </div>
 
       <h2 class="section-title">Знаешь ли ты?</h2>
       <article class="prose fact src-${fact.q.src}">
-        <p class="eyebrow" style="margin-bottom:8px">${esc(fact.kind)} · ${esc(fact.q.olymp.grade)} класс, ${esc(qLabel(fact.q))}</p>
+        <p class="eyebrow" style="margin-bottom:8px">${esc(fact.kind)} · ${esc(olabel(fact.q.olymp))}, ${esc(qLabel(fact.q))}</p>
         <div>${fact.html}</div>
         <div class="actions" style="margin-top:14px"><button class="btn btn-sm" data-act="fact">Ещё факт</button><button class="btn btn-sm btn-ghost" data-act="goto" data-qid="${fact.q.id}">К этому вопросу${I.next}</button></div>
       </article>
 
-      <p class="footnote">Задания и разборы взяты из материалов олимпиад: городской этап, 7 класс, 2014/2015 и школьный этап, 8 класс, 2016/2017. Прогресс хранится только в этом браузере.</p>
+      <p class="footnote">Задания и разборы взяты из материалов олимпиад: городской этап, 7 класс, 2014/2015; школьный этап, 8 класс, 2016/2017; олимпиада 8 класса, 2018/2019. Прогресс хранится только в этом браузере.</p>
     </main>`;
     startEyepiece();
   }
@@ -400,10 +402,23 @@
   }
 
   // ------------------------------------------------------------ вопрос
-  const KIND = { single: 'Один ответ', multi: 'Несколько верных', text: 'Пропущенное слово', terms: 'Термины', match: 'Соответствие', table: 'Таблица' };
+  const KIND = { single: 'Один ответ', multi: 'Несколько верных', text: 'Пропущенное слово', terms: 'Термины', match: 'Соответствие', table: 'Таблица', open: 'Открытый вопрос' };
+  // ответы, которые разбор признаёт допустимыми наравне с основным
+  const acceptSets = (q) => q.acceptSets || [q.answer];
+  function bestSet(q, resp) {
+    let best = acceptSets(q)[0], score = -Infinity;
+    for (const set of acceptSets(q)) {
+      const hit = resp.filter((k) => set.includes(k)).length;
+      const sc = hit * 100 - (resp.length - hit);
+      if (sc > score) { score = sc; best = set; }
+    }
+    return best;
+  }
+  const singleOk = (q, k) => k === q.answer || !!(q.alsoAccept && k && Object.prototype.hasOwnProperty.call(q.alsoAccept, k));
+  const matchOk = (q, row, v) => v === q.answer[row] || !!(v && q.altAnswers && q.altAnswers[row] && Object.prototype.hasOwnProperty.call(q.altAnswers[row], v));
   function qLabel(q) {
     if (q.sec.bonus) return 'бонус ' + q.num;
-    if (q.src === 'g8') return q.head || 'задание ' + q.num;
+    if (q.src !== 'g7') return q.head || 'задание ' + q.num;
     const sec = q.sec.short.split(' · ')[0];
     return `${sec}, № ${q.num}`;
   }
@@ -420,6 +435,7 @@
       case 'terms': return q.items.map(() => '');
       case 'match': return {};
       case 'table': return {};
+      case 'open': return '';
       default: return null;
     }
   }
@@ -440,13 +456,18 @@
     const res = { ok: false, parts: {}, notes: [], filled: true };
     switch (q.type) {
       case 'single':
-        res.filled = !!resp; res.ok = resp === q.answer; break;
+        res.filled = !!resp; res.ok = singleOk(q, resp);
+        if (res.ok && resp !== q.answer) res.notes.push({ cls: 'okish', msg: q.alsoAccept[resp] });
+        break;
       case 'multi': {
+        const target = bestSet(q, resp);
         res.filled = resp.length > 0;
-        resp.forEach((k) => { res.parts[k] = q.answer.includes(k); });
-        res.ok = sameSet(resp, q.answer);
-        res.hit = resp.filter((k) => q.answer.includes(k)).length;
+        resp.forEach((k) => { res.parts[k] = target.includes(k); });
+        res.ok = acceptSets(q).some((set) => sameSet(resp, set));
+        res.hit = resp.filter((k) => target.includes(k)).length;
         res.extra = resp.length - res.hit;
+        res.need = target.length;
+        if (res.ok && target !== acceptSets(q)[0] && q.setNote) res.notes.push({ cls: 'okish', msg: q.setNote });
         break;
       }
       case 'text':
@@ -468,8 +489,9 @@
       }
       case 'match': {
         res.filled = Object.values(resp).some(Boolean);
-        q.left.forEach((l) => { res.parts[l.key] = resp[l.key] === q.answer[l.key]; });
+        q.left.forEach((l) => { res.parts[l.key] = matchOk(q, l.key, resp[l.key]); });
         res.ok = q.left.every((l) => res.parts[l.key]);
+        if (res.ok && q.altAnswers) q.left.forEach((l) => { if (resp[l.key] !== q.answer[l.key]) res.notes.push({ cls: 'okish', msg: q.altAnswers[l.key][resp[l.key]] }); });
         break;
       }
       case 'table': {
@@ -484,7 +506,7 @@
     }
     const vals = Object.values(res.parts);
     res.right = vals.filter(Boolean).length;
-    res.total = q.type === 'multi' ? q.answer.length : vals.length;
+    res.total = q.type === 'multi' ? res.need : vals.length;
     return res;
   }
 
@@ -494,7 +516,7 @@
   const hintMax = (word) => Math.min(3, Array.from(word.replace(/\s+/g, '')).length - 1);
   const hintLetters = (word, n) => Array.from(word).slice(0, n).join('');
   const hintUsed = (q) => Object.values(store.hints[q.id] || {}).some((n) => n > 0);
-  const clearQuestion = (q) => { delete store.answers[q.id]; delete store.hints[q.id]; delete work[q.id]; delete work['stmt:' + q.id]; };
+  const clearQuestion = (q) => { delete store.answers[q.id]; delete store.hints[q.id]; delete work[q.id]; delete work['stmt:' + q.id]; delete work['key:' + q.id]; };
   function hintHTML(q, i, spec, locked) {
     if (locked || !spec.word) return '';
     const n = hintCount(q, i);
@@ -511,7 +533,7 @@
   }
   const placeholderFor = (q, i, spec, base) => { const n = hintCount(q, i); return n ? hintLetters(spec.word, n) + '…' : base; };
   // разбор доступен после первой попытки, а с переключателем «Ответы сразу» — в любой момент
-  const canOpen = (q) => { const r = rec(q); return !!store.settings.peek || !!(r && (r.attempts > 0 || r.revealed || r.solved)); };
+  const canOpen = (q) => { const r = rec(q); return q.type === 'open' || !!store.settings.peek || !!(r && (r.attempts > 0 || r.revealed || r.solved)); };
 
   // --- разметка ответа по типам
   function optionsHTML(q, resp, r, locked, lastEval) {
@@ -524,13 +546,14 @@
       const checked = isMulti ? resp.includes(o.key) : resp === o.key;
       let cls = '', flag = '';
       if (solvedOrRev) {
-        const correct = isMulti ? q.answer.includes(o.key) : q.answer === o.key;
+        const target = isMulti ? (r.solved ? bestSet(q, resp) : acceptSets(q)[0]) : null;
+        const correct = isMulti ? target.includes(o.key) : (q.answer === o.key || (checked && singleOk(q, o.key)));
         if (correct) { cls = checked ? 'is-right' : 'is-missed'; flag = 'верно'; }
         else if (checked) { cls = 'is-wrong'; flag = 'неверно'; }
         else if (!isMulti && tried.includes(o.key)) { cls = 'is-wrong is-tried'; flag = 'было'; }
       } else if (lastEval && !lastEval.ok) {
         if (isMulti && checked && lastEval.parts[o.key] === false) { cls = 'is-wrong'; flag = 'лишнее'; }
-        if (!isMulti && checked && resp !== q.answer) { cls = 'is-wrong'; flag = 'неверно'; }
+        if (!isMulti && checked && !singleOk(q, resp)) { cls = 'is-wrong'; flag = 'неверно'; }
       }
       if (!solvedOrRev && !isMulti && tried.includes(o.key) && !checked) { cls = 'is-tried'; flag = 'было'; }
       let matchBadge = '';
@@ -560,7 +583,7 @@
       const val = resp[l.key] || '';
       let cls = '', fix = '';
       if (solvedOrRev || (lastEval && !lastEval.ok && val)) {
-        const ok = val === q.answer[l.key];
+        const ok = matchOk(q, l.key, val);
         cls = ok ? 'is-right' : (val || solvedOrRev ? 'is-wrong' : '');
         if (solvedOrRev && !ok) {
           const right = q.right.find((x) => x.key === q.answer[l.key]);
@@ -579,7 +602,7 @@
         ${control}${fix}
       </div>`;
     }).join('');
-    return `${legend}<div class="match">
+    return `${legend}<div class="match${q.imgRows ? ' match-img' : ''}">
       ${q.style === 'segmented' ? '' : `<div class="match-head"><span>${esc(q.leftTitle || '')}</span><span>${esc(q.rightTitle || '')}</span></div>`}
       ${rows}</div>`;
   }
@@ -692,11 +715,20 @@
       case 'match': body += matchHTML(q, resp, r, locked, lastEvalFor(q)); break;
       case 'table': body += tableHTML(q, resp, r, locked, lastEvalFor(q)); break;
       case 'terms': body += termsHTML(q, resp, r, locked, lastEvalFor(q)); break;
+      case 'open': body += `<label class="open-label" for="draft-${q.id}">Твой ответ (черновик, его никто не проверяет)</label>
+        <textarea class="open-draft" id="draft-${q.id}" data-input="draft" rows="5" ${locked ? 'disabled' : ''} placeholder="Запиши ответ по пунктам а), б), в)…">${esc(resp || '')}</textarea>`; break;
       default: break;
     }
 
     const solved = r && r.solved && !r.revealed;
-    const actions = locked
+    const keyShown = !!work['key:' + q.id];
+    const actions = !locked && q.type === 'open'
+      ? (keyShown
+        ? `<button class="btn btn-ok" data-act="self" data-val="ok" id="check-btn">${I.check.replace('<svg', '<svg class="ico"')}Я ответила верно</button>
+           <button class="btn" data-act="self" data-val="bad">Были ошибки</button>`
+        : `<button class="btn btn-primary" data-act="check" id="check-btn">Показать ключ</button>
+           <button class="btn btn-ghost" data-act="skip">Пропустить</button>`)
+      : locked
       ? `<button class="btn btn-primary" data-act="next">${view.idx < o.flat.length - 1 || queue ? 'Следующий вопрос' : 'К итогам'}${I.next}</button>
          <button class="btn btn-ghost" data-act="retry">Решить заново</button>`
       : `<button class="btn btn-primary" data-act="check" id="check-btn">Проверить</button>
@@ -705,7 +737,7 @@
 
     const yourStars = solved ? r.stars : 0;
     app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap${enterCls()}" data-qid="${q.id}">
-      <div class="qhead"><h2><b>${o.grade} класс</b> · ${esc(q.sec.title)}</h2>
+      <div class="qhead"><h2><b>${esc(olabel(o))}</b> · ${esc(q.sec.title)}</h2>
         <div class="qhead-tools">
           <label class="switch" title="Разрешить открывать разбор и ответ до того, как ответишь">
             <input type="checkbox" role="switch" id="peek-switch" data-input="peek" ${store.settings.peek ? 'checked' : ''}>
@@ -717,12 +749,12 @@
       <nav class="qmap" aria-label="Карта вопросов">${map}</nav>
       <article class="slide" id="slide" aria-labelledby="slide-num">
         <aside class="slide-label">
-          <div class="slide-num" id="slide-num"><small>${q.sec.bonus ? 'бонус' : q.src === 'g8' && /^\d+$/.test(q.num) && q.type === 'single' ? 'тест' : 'вопрос'}</small>${esc(q.num)}</div>
+          <div class="slide-num" id="slide-num"><small>${q.sec.bonus ? 'бонус' : /^П/.test(q.num) ? 'практика' : q.src !== 'g7' && /^\d+$/.test(q.num) && q.type === 'single' ? 'тест' : 'вопрос'}</small>${esc(q.num)}</div>
           <div class="slide-stars" aria-label="Звёзды за вопрос: ${yourStars} из 3">${stars(yourStars)}</div>
           <div class="slide-kind">${KIND[q.type]}</div>
         </aside>
         <div class="slide-body">
-          ${q.head && q.src === 'g8' ? `<p class="q-topic">${esc(q.head)}${q.topic ? ' · ' + esc(q.topic) : ''}</p>` : `<p class="q-topic">${esc(q.sec.short)}</p>`}
+          ${q.head && q.src !== 'g7' ? `<p class="q-topic">${esc(q.head)}${q.topic ? ' · ' + esc(q.topic) : ''}</p>` : `<p class="q-topic">${esc(q.sec.short)}</p>`}
           ${body}
           <div class="actions">${actions}</div>
           <div id="fb" aria-live="polite">${feedbackHTML(q)}</div>
@@ -748,6 +780,12 @@
   function feedbackHTML(q) {
     const r = rec(q);
     const ev = lastEvalFor(q);
+    if (q.type === 'open') {
+      if (r && r.revealed) return `<div class="feedback fb-info"><span class="fb-ico">${I.info}</span><div><h3>Ничего страшного</h3><p>Перечитай ключ в разборе ниже и попробуй рассказать ответ своими словами. Потом нажми «Решить заново».</p></div></div>`;
+      if (r && r.solved) return `<div class="feedback fb-ok"><span class="fb-ico">${I.check}</span><div><h3>Отлично!<span class="fb-stars">${stars(r.stars)}</span></h3><p>Ты сверилась с ключом и ответила верно. Такие задачи на перенос знаний — самые олимпиадные.</p></div></div>`;
+      if (work['key:' + q.id]) return `<div class="feedback fb-info"><span class="fb-ico">${I.info}</span><div><h3>Сверь ответ с ключом</h3><p>Ключ открыт в разборе ниже. Сравни его со своим ответом по каждому пункту и честно оцени себя.</p></div></div>`;
+      return '';
+    }
     if (r && r.revealed) {
       return `<div class="feedback fb-info"><span class="fb-ico">${I.info}</span><div><h3>Ответ открыт</h3><p>Звёзд за этот вопрос не будет, зато теперь ты знаешь, как его решать. Нажми «Решить заново», чтобы закрепить.</p></div></div>`;
     }
@@ -765,7 +803,7 @@
         msg = `Вариант «${esc(ev.resp)}» не подходит. Перечитай условие: часто всё решает одно слово.`;
         if (q.optionNotes && q.optionNotes[ev.resp]) items.push(q.optionNotes[ev.resp]);
       } else if (q.type === 'multi') {
-        msg = `Верно отмечено ${ev.hit} из ${q.answer.length}.` + (ev.extra ? ` Лишних отметок: ${ev.extra} — они подсвечены красным.` : ' Каких-то верных суждений не хватает.');
+        msg = `Верно отмечено ${ev.hit} из ${ev.total}.` + (ev.extra ? ` Лишних отметок: ${ev.extra} — они подсвечены красным.` : ' Каких-то верных суждений не хватает.');
       } else if (q.type === 'text' || q.type === 'terms') {
         msg = `Верно ${ev.right} из ${ev.total}. Красным отмечено то, что нужно исправить.`;
         if (q.type === 'text') ev.notes.forEach((n) => { if (n && n.cls === 'bad') items.push(n.msg); });
@@ -782,7 +820,8 @@
     const r = rec(q);
     const can = canOpen(q);
     const done = !!(r && (r.solved || r.revealed));
-    const sub = !can ? 'Откроется после первой попытки ответа (или включи «Ответы сразу»)'
+    const sub = q.type === 'open' ? 'Ключ и пояснение: открывается без штрафа'
+      : !can ? 'Откроется после первой попытки ответа (или включи «Ответы сразу»)'
       : done ? 'Почему так, где ловушка и как запомнить'
         : 'Покажет правильный ответ — звёзд за вопрос уже не будет';
     return `<section class="drawer ${drawerOpen && can ? 'is-open' : ''}" id="drawer">
@@ -804,12 +843,13 @@
     let your = '';
     if (q.type === 'single' && r.tried && r.tried.length) your = `<span class="your-answer">Твои неверные попытки: ${r.tried.map(esc).join(', ')}</span>`;
     let nav = '';
-    if (q.src === 'g8') {
+    if (q.src !== 'g7') {
       const t = document.createElement('template'); t.innerHTML = q.explanation;
       const blocks = [...t.content.querySelectorAll('.blk')].map((b) => [...b.classList].find((c) => BLOCK_NAMES[c])).filter(Boolean);
       if (blocks.length > 2) nav = `<nav class="expl-nav" aria-label="Шаги разбора">${blocks.map((c) => `<button type="button" data-act="blk" data-blk="${c}" style="--nav-c:${BLOCK_COLORS[c]}">${BLOCK_NAMES[c]}</button>`).join('')}</nav>`;
     }
-    inner.innerHTML = `<div class="answer-card"><span>Правильный ответ</span><div class="ans-body">${q.answerHtml || ''}</div>${your}</div>${nav}<div class="expl src-${q.src}">${q.explanation}</div>`;
+    const longAns = stripTags(q.answerHtml || '').length > 160;
+    inner.innerHTML = `<div class="answer-card"><span>${q.type === 'open' ? 'Ключ' : 'Правильный ответ'}</span><div class="ans-body${longAns ? ' is-long' : ''}">${q.answerHtml || ''}</div>${your}</div>${nav}<div class="expl src-${q.src}">${q.explanation}</div>`;
     // подсветить в разборе вариант, который выбирала ученица
     (r.tried || []).forEach((k) => inner.querySelectorAll(`.expl [data-opt="${CSS.escape(k)}"]`).forEach((el) => el.classList.add('is-picked')));
     inner.querySelectorAll('.blk').forEach((b) => { const c = [...b.classList].find((x) => BLOCK_NAMES[x]); if (c) b.id = `${q.id}-${c}`; });
@@ -829,8 +869,20 @@
       toast('Сначала попробуй ответить — или включи «Ответы сразу» вверху');
       return;
     }
-    const r = rec(q) || (store.answers[q.id] = { attempts: 0, solved: false, revealed: false, stars: 0, tried: [] });
-    if (open && !r.solved && !r.revealed) {
+    if (q.type === 'open' && open && !work['key:' + q.id] && !rec(q)) {
+      // открытый вопрос: ключ можно смотреть без штрафа, после него — самооценка
+      work['key:' + q.id] = true;
+      drawerOpen = false; renderQuiz();
+      drawerOpen = true; fillDrawer(q, true);
+      const dd = document.getElementById('drawer');
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        dd.classList.add('is-open');
+        dd.querySelector('.drawer-head').setAttribute('aria-expanded', 'true');
+      }));
+      return;
+    }
+    const r = rec(q) || (q.type === 'open' ? {} : (store.answers[q.id] = { attempts: 0, solved: false, revealed: false, stars: 0, tried: [] }));
+    if (open && !r.solved && !r.revealed && q.type !== 'open') {
       // открыть разбор до верного ответа = посмотреть ответ
       r.revealed = true; r.stars = 0; r.response = getResp(q); save();
       delete work[q.id];
@@ -866,6 +918,7 @@
   function doCheck() {
     const o = olymp();
     const q = o.flat[view.idx];
+    if (q.type === 'open') { if (!work['key:' + q.id]) setDrawer(true); return; }
     const resp = getResp(q);
     const ev = evaluate(q, resp);
     ev.qid = q.id; ev.resp = resp;
@@ -938,7 +991,7 @@
     }).join('');
     const lbl = { ok2: 'не с первой попытки', bad: 'есть ошибка', rev: 'подсмотрено', none: 'не решён' };
     app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap${enterCls()}">
-      <div class="qhead"><h2><b>${o.grade} класс</b> · итоги</h2><span class="qcount">${st.done} из ${st.total} вопросов</span></div>
+      <div class="qhead"><h2><b>${esc(olabel(o))}</b> · итоги</h2><span class="qcount">${st.done} из ${st.total} вопросов</span></div>
       <section class="diploma">
         <span class="kicker">${esc(o.stage)} · ${esc(o.year)} · ${o.grade} класс${finished ? '' : ' · промежуточный итог'}</span>
         ${I.seal}
@@ -969,7 +1022,7 @@
     const n = o.notes.find((x) => x.id === id) || o.notes[0];
     const shown = view['spoil:' + n.id];
     app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap${enterCls()}">
-      <div class="qhead"><h2><b>${o.grade} класс</b> · памятки</h2><button class="btn btn-sm" data-act="open" data-oid="${o.id}">К вопросам${I.next}</button></div>
+      <div class="qhead"><h2><b>${esc(olabel(o))}</b> · памятки</h2><button class="btn btn-sm" data-act="open" data-oid="${o.id}">К вопросам${I.next}</button></div>
       <div class="tabs" role="tablist">${o.notes.map((x) => `<button class="tab" role="tab" id="tab-${x.id}" aria-selected="${x.id === n.id}" aria-controls="note-panel" data-act="note" data-note="${x.id}">${esc(x.title)}</button>`).join('')}</div>
       <article class="prose src-${o.id}" id="note-panel" role="tabpanel" aria-labelledby="tab-${n.id}">
         ${n.spoiler && !shown ? `<div class="spoiler"><b>${esc(n.title)}</b><p>Здесь все правильные ответы. Лучше открыть после того, как попробуешь решить сама.</p><button class="btn btn-primary" data-act="spoil" data-note="${n.id}">Показать ключ</button></div>` : n.html}
@@ -979,9 +1032,9 @@
 
   // ------------------------------------------------------------ карточки
   const deckState = {};
+  const deckCache = {};
   function deckCards(deck) {
-    const g8 = OLY.find((o) => o.id === 'g8');
-    return deck === 'dict' ? g8.dictCards : g8.cards;
+    return deckCache[deck] ||= OLY.flatMap((o) => ((deck === 'dict' ? o.dictCards : o.cards) || []).map((c) => ({ ...c, tag: olabel(o) })));
   }
   function renderCards() {
     const deck = view.deck === 'dict' ? 'dict' : 'self';
@@ -1000,7 +1053,7 @@
       </div>
       ${card ? `<div class="flip-stage">
         <button class="flip ${ds.flipped ? 'is-flipped' : ''}" data-act="flip" aria-label="Перевернуть карточку">
-          <span class="flip-face flip-front"><span class="fl-tag">${deck === 'dict' ? 'термин' : 'вопрос'} · нажми, чтобы перевернуть</span><span class="fl-main">${card.front}</span></span>
+          <span class="flip-face flip-front"><span class="fl-tag">${deck === 'dict' ? 'термин' : 'вопрос'} · ${esc(card.tag)}</span><span class="fl-main">${card.front}</span></span>
           <span class="flip-face flip-back" aria-hidden="${!ds.flipped}"><span class="fl-tag">${deck === 'dict' ? 'корни и перевод' : 'ответ'}</span><span>${card.back}</span></span>
         </button>
       </div>
@@ -1008,7 +1061,7 @@
         <button class="btn" data-act="again">Повторить позже</button>
         <button class="btn btn-ok" data-act="know">${I.check.replace('<svg', '<svg class="ico"')}Знаю</button>
       </div>
-      <p class="deck-progress">В колоде осталось ${left} · <kbd>пробел</kbd> переворачивает</p>`
+      <p class="deck-progress">В колоде осталось ${left} · нажми на карточку или <kbd>пробел</kbd>, чтобы перевернуть</p>`
       : `<div class="spoiler"><b>Колода пройдена!</b><p>Все ${all.length} ${plural(all.length, 'карточка', 'карточки', 'карточек')} — в копилке. Можно пройти ещё раз вперемешку.</p><button class="btn btn-primary" data-act="restart-deck">Пройти ещё раз</button></div>`}
     </main>`;
   }
@@ -1027,7 +1080,7 @@
   // ------------------------------------------------------------ события
   const resetArm = {};
   app.addEventListener('click', (e) => {
-    const img = e.target.closest('.cond-media img');
+    const img = e.target.closest('.cond-media img, .match-left img');
     if (img) { openLightbox(img); return; }
     const el = e.target.closest('[data-act]');
     if (!el || el.disabled) return;
@@ -1082,6 +1135,19 @@
         break;
       }
       case 'check': doCheck(); break;
+      case 'self': {
+        const q = o.flat[view.idx];
+        const good = el.dataset.val === 'ok';
+        store.answers[q.id] = { attempts: 1, solved: good, revealed: !good, stars: good ? 3 : 0, tried: [], response: getResp(q), self: true };
+        save(); delete work[q.id]; lastEval = null;
+        renderQuiz();
+        if (good) {
+          sfx.ok();
+          const rc = (document.querySelector('.feedback') || document.getElementById('slide')).getBoundingClientRect();
+          burst(rc.left + Math.min(60, rc.width / 2), rc.top + 20);
+        } else sfx.tick();
+        break;
+      }
       case 'skip': move(1); break;
       case 'next': move(1); break;
       case 'prev': move(-1); break;
@@ -1227,6 +1293,7 @@
     if (!el.dataset) return;
     if (el.dataset.input === 'name') { store.name = el.value.slice(0, 60); save(); return; }
     if (view.screen !== 'quiz') return;
+    if (el.dataset.input === 'draft') { work[olymp().flat[view.idx].id] = el.value; return; }
     if (el.dataset.input === 'blank' || el.dataset.input === 'term') {
       const q = olymp().flat[view.idx];
       const resp = getResp(q);
