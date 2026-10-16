@@ -23,7 +23,7 @@
 
   // ------------------------------------------------------------ хранилище (только в этом браузере)
   const STORE_KEY = 'olymp-microscope-v1';
-  const blankState = () => ({ answers: {}, settings: { sound: true, theme: '' }, last: {}, name: '' });
+  const blankState = () => ({ answers: {}, hints: {}, settings: { sound: true, theme: '', peek: false }, last: {}, name: '' });
   const store = (() => {
     try {
       const raw = localStorage.getItem(STORE_KEY);
@@ -49,6 +49,7 @@
     back: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></svg>',
     next: '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>',
     book: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 5.5C6.5 4 9.5 4 12 6c2.5-2 5.5-2 8-.5V19c-2.5-1.5-5.5-1.5-8 .5-2.5-2-5.5-2-8-.5z"/><path d="M12 6v13.5" stroke="currentColor" stroke-width="2"/></svg>',
+    bulb: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 18h6M10 21h4M12 3a6 6 0 00-3.6 10.8c.7.6 1.1 1.3 1.1 2.2h5c0-.9.4-1.6 1.1-2.2A6 6 0 0012 3z"/></svg>',
     lock: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="10" rx="2.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8.5 10.5V8a3.5 3.5 0 017 0v2.5" fill="none" stroke="currentColor" stroke-width="2"/></svg>',
     sun: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" stroke-width="2"/><path stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/></svg>',
     moon: '<svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M19.5 14.5A8 8 0 019.5 4.5a8 8 0 1010 10z"/></svg>',
@@ -305,7 +306,7 @@
       <ol class="how">
         <li><b>Отвечай.</b> Выбери вариант, впиши слово или собери соответствие и нажми «Проверить».</li>
         <li><b>Ошиблась — пробуй ещё.</b> Неверное подсвечивается красным. С первой попытки — три звезды, со второй — две, дальше — одна.</li>
-        <li><b>Раскрой разбор.</b> После первой попытки открывается подробное объяснение: почему верно, где ловушка и как запомнить.</li>
+        <li><b>Раскрой разбор.</b> После первой попытки открывается подробное объяснение: почему верно, где ловушка и как запомнить. Переключатель «Ответы сразу» открывает его и до ответа. Где нужно вписать слово, можно подсмотреть до трёх первых букв.</li>
       </ol>
 
       <h2 class="section-title">Повторить и запомнить</h2>
@@ -487,6 +488,31 @@
     return res;
   }
 
+  // --- подсказка «Показать первую букву» (до трёх букв, слово целиком не раскрывается)
+  const HINT_NAMES = ['первую', 'вторую', 'третью'];
+  const hintCount = (q, i) => ((store.hints[q.id] || {})[i]) || 0;
+  const hintMax = (word) => Math.min(3, Array.from(word.replace(/\s+/g, '')).length - 1);
+  const hintLetters = (word, n) => Array.from(word).slice(0, n).join('');
+  const hintUsed = (q) => Object.values(store.hints[q.id] || {}).some((n) => n > 0);
+  const clearQuestion = (q) => { delete store.answers[q.id]; delete store.hints[q.id]; delete work[q.id]; delete work['stmt:' + q.id]; };
+  function hintHTML(q, i, spec, locked) {
+    if (locked || !spec.word) return '';
+    const n = hintCount(q, i);
+    const shown = n ? `<span class="hint-letters">Начинается на «<b>${esc(hintLetters(spec.word, n))}</b>…»</span>` : '';
+    const btn = n < hintMax(spec.word)
+      ? `<button type="button" class="hint-btn" data-act="hint" data-i="${i}" title="Подсказка по буквам снимает одну звезду за вопрос">${I.bulb}Показать ${HINT_NAMES[n]} букву</button>`
+      : '<span class="hint-end">Больше подсказок нет</span>';
+    return `<div class="hint-row">${btn}${shown}</div>`;
+  }
+  function textHintsHTML(q, locked) {
+    if (locked) return '';
+    const many = q.blanks.length > 1;
+    return `<div class="hints">${q.blanks.map((b, i) => `<div class="hint-line">${many ? `<span class="hint-lbl">Пропуск ${i + 1}</span>` : ''}${hintHTML(q, i, b, locked)}</div>`).join('')}</div>`;
+  }
+  const placeholderFor = (q, i, spec, base) => { const n = hintCount(q, i); return n ? hintLetters(spec.word, n) + '…' : base; };
+  // разбор доступен после первой попытки, а с переключателем «Ответы сразу» — в любой момент
+  const canOpen = (q) => { const r = rec(q); return !!store.settings.peek || !!(r && (r.attempts > 0 || r.revealed || r.solved)); };
+
   // --- разметка ответа по типам
   function optionsHTML(q, resp, r, locked, lastEval) {
     const tried = (r && r.tried) || [];
@@ -588,7 +614,7 @@
         const ok = lastEval ? lastEval.parts[i - 1] : (solvedOrRev && r.solved);
         cls = ok ? 'is-right' : (v ? 'is-wrong' : '');
       }
-      out += `<input class="blank ${cls}" id="blank-${q.id}-${i - 1}" data-input="blank" data-i="${i - 1}" value="${esc(v)}" ${locked ? 'disabled' : ''} autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="впиши слово" aria-label="Пропуск ${i}">` + parts[i];
+      out += `<input class="blank ${cls}" id="blank-${q.id}-${i - 1}" data-input="blank" data-i="${i - 1}" value="${esc(v)}" ${locked ? 'disabled' : ''} autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(placeholderFor(q, i - 1, q.blanks[i - 1], 'впиши слово'))}" aria-label="Пропуск ${i}">` + parts[i];
     }
     return out;
   }
@@ -610,7 +636,7 @@
         if (!ok) hint = `<p class="term-hint okish">Верно: ${esc(answers[i])}</p>`;
       }
       return `<li class="term ${cls}"><b>${i + 1}</b><span>${it.html}</span>
-        <input class="blank ${cls}" id="term-${q.id}-${i}" data-input="term" data-i="${i}" value="${esc(v)}" ${locked ? 'disabled' : ''} autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="термин" aria-label="Термин ${i + 1}">${hint}</li>`;
+        <input class="blank ${cls}" id="term-${q.id}-${i}" data-input="term" data-i="${i}" value="${esc(v)}" ${locked ? 'disabled' : ''} autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="${esc(placeholderFor(q, i, it, 'термин'))}" aria-label="Термин ${i + 1}">${hintHTML(q, i, it, locked)}${hint}</li>`;
     }).join('')}</ol>`;
   }
   function termAnswers(q) {
@@ -633,7 +659,7 @@
     const q = o.flat[view.idx];
     if (view.queue && view.queue.fresh && view.queue.fresh.has(view.idx)) {
       view.queue.fresh.delete(view.idx);
-      delete store.answers[q.id]; delete work[q.id]; delete work['stmt:' + q.id];
+      clearQuestion(q);
     }
     store.last[o.id] = view.idx; save();
     const r = rec(q);
@@ -655,7 +681,7 @@
     }).join('')}</div></div>`).join('');
 
     let body = '';
-    if (q.type === 'text') body += `<div class="stem">${textStemHTML(q, resp, r, locked, lastEvalFor(q))}</div>`;
+    if (q.type === 'text') body += `<div class="stem">${textStemHTML(q, resp, r, locked, lastEvalFor(q))}</div>` + textHintsHTML(q, locked);
     else body += `<div class="stem">${q.stem}</div>`;
     if (q.instructions) body += `<p class="q-instr">${esc(q.instructions)}</p>`;
     if (q.note) body += `<p class="q-note">${q.note}</p>`;
@@ -679,7 +705,15 @@
 
     const yourStars = solved ? r.stars : 0;
     app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap${enterCls()}" data-qid="${q.id}">
-      <div class="qhead"><h2><b>${o.grade} класс</b> · ${esc(q.sec.title)}</h2><span class="qcount tabnum">${counter}</span></div>
+      <div class="qhead"><h2><b>${o.grade} класс</b> · ${esc(q.sec.title)}</h2>
+        <div class="qhead-tools">
+          <label class="switch" title="Разрешить открывать разбор и ответ до того, как ответишь">
+            <input type="checkbox" role="switch" id="peek-switch" data-input="peek" ${store.settings.peek ? 'checked' : ''}>
+            <span class="switch-track" aria-hidden="true"></span><span class="switch-lbl">Ответы сразу</span>
+          </label>
+          <span class="qcount tabnum">${counter}</span>
+        </div>
+      </div>
       <nav class="qmap" aria-label="Карта вопросов">${map}</nav>
       <article class="slide" id="slide" aria-labelledby="slide-num">
         <aside class="slide-label">
@@ -702,7 +736,11 @@
       </nav>
     </main>`;
     const cur = app.querySelector('.qdot.is-cur');
-    if (cur && cur.scrollIntoView) cur.scrollIntoView({ block: 'nearest', inline: 'center' });
+    const qmap = app.querySelector('.qmap');
+    if (cur && qmap) {
+      const a = cur.getBoundingClientRect(), b = qmap.getBoundingClientRect();
+      qmap.scrollLeft += a.left - b.left - (b.width - a.width) / 2;
+    }
     if (drawerOpen) fillDrawer(q, false);
   }
   const lastEvalFor = (q) => (lastEval && lastEval.qid === q.id ? lastEval : null);
@@ -715,7 +753,7 @@
     }
     if (r && r.solved) {
       const praise = r.attempts === 1 ? (ev ? ev.praise : 'Решено с первой попытки.') : `Решено с ${r.attempts}-й попытки.`;
-      return `<div class="feedback fb-ok"><span class="fb-ico">${I.check}</span><div><h3>Верно!<span class="fb-stars">${stars(r.stars)}</span></h3><p>${esc(praise)} Загляни в разбор: там приёмы, которые пригодятся в похожих вопросах.</p>${ev && ev.notes.some(Boolean) ? `<ul>${ev.notes.filter(Boolean).map((n) => `<li>${esc(n.msg)}</li>`).join('')}</ul>` : ''}</div></div>`;
+      return `<div class="feedback fb-ok"><span class="fb-ico">${I.check}</span><div><h3>Верно!<span class="fb-stars">${stars(r.stars)}</span></h3><p>${esc(praise)}${r.hinted ? ' Подсказка по буквам сняла одну звезду.' : ''} Загляни в разбор: там приёмы, которые пригодятся в похожих вопросах.</p>${ev && ev.notes.some(Boolean) ? `<ul>${ev.notes.filter(Boolean).map((n) => `<li>${esc(n.msg)}</li>`).join('')}</ul>` : ''}</div></div>`;
     }
     if (ev && !ev.filled) {
       return `<div class="feedback fb-info"><span class="fb-ico">${I.info}</span><div><h3>Сначала ответь</h3><p>${q.type === 'single' ? 'Выбери один вариант.' : 'Заполни хотя бы часть ответа.'}</p></div></div>`;
@@ -742,9 +780,10 @@
 
   function drawerHTML(q) {
     const r = rec(q);
-    const can = !!(r && (r.attempts > 0 || r.revealed || r.solved));
-    const sub = !can ? 'Откроется после первой попытки ответа'
-      : (r.solved || r.revealed) ? 'Почему так, где ловушка и как запомнить'
+    const can = canOpen(q);
+    const done = !!(r && (r.solved || r.revealed));
+    const sub = !can ? 'Откроется после первой попытки ответа (или включи «Ответы сразу»)'
+      : done ? 'Почему так, где ловушка и как запомнить'
         : 'Покажет правильный ответ — звёзд за вопрос уже не будет';
     return `<section class="drawer ${drawerOpen && can ? 'is-open' : ''}" id="drawer">
       <button class="drawer-head" data-act="drawer" aria-expanded="${drawerOpen && can}" aria-controls="drawer-body" ${can ? '' : 'aria-disabled="true"'}>
@@ -785,13 +824,12 @@
     const q = olymp().flat[view.idx];
     const d = document.getElementById('drawer');
     if (!d) return;
-    const r = rec(q);
-    const can = !!(r && (r.attempts > 0 || r.revealed || r.solved));
-    if (!can) {
+    if (!canOpen(q)) {
       d.classList.remove('shake'); void d.offsetWidth; d.classList.add('shake');
-      toast('Сначала попробуй ответить — разбор откроется после первой попытки');
+      toast('Сначала попробуй ответить — или включи «Ответы сразу» вверху');
       return;
     }
+    const r = rec(q) || (store.answers[q.id] = { attempts: 0, solved: false, revealed: false, stars: 0, tried: [] });
     if (open && !r.solved && !r.revealed) {
       // открыть разбор до верного ответа = посмотреть ответ
       r.revealed = true; r.stars = 0; r.response = getResp(q); save();
@@ -838,6 +876,8 @@
     if (ev.ok) {
       r.solved = true;
       r.stars = r.revealed ? 0 : Math.max(1, 4 - r.attempts);
+      r.hinted = hintUsed(q);
+      if (r.hinted) r.stars = Math.min(r.stars, 2);
       ev.praise = pick(PRAISE);
     } else if (q.type === 'single' && !r.tried.includes(resp)) {
       r.tried.push(resp);
@@ -1046,9 +1086,20 @@
       case 'next': move(1); break;
       case 'prev': move(-1); break;
       case 'retry': {
-        const q = o.flat[view.idx];
-        delete store.answers[q.id]; delete work[q.id]; delete work['stmt:' + q.id];
+        clearQuestion(o.flat[view.idx]);
         save(); lastEval = null; drawerOpen = false; renderQuiz();
+        break;
+      }
+      case 'hint': {
+        const q = o.flat[view.idx];
+        const i = +el.dataset.i;
+        const spec = q.type === 'text' ? q.blanks[i] : q.items[i];
+        const h = store.hints[q.id] || (store.hints[q.id] = {});
+        h[i] = Math.min(hintMax(spec.word), (h[i] || 0) + 1);
+        save(); sfx.tick();
+        renderQuiz();
+        const input = document.getElementById(q.type === 'text' ? `blank-${q.id}-${i}` : `term-${q.id}-${i}`);
+        (app.querySelector(`.hint-btn[data-i="${i}"]`) || input)?.focus({ preventScroll: true });
         break;
       }
       case 'drawer': {
@@ -1089,7 +1140,7 @@
         }
         resetArm[oid] = false;
         const oo = OLY.find((x) => x.id === oid);
-        oo.flat.forEach((q) => { delete store.answers[q.id]; delete work[q.id]; delete work['stmt:' + q.id]; });
+        oo.flat.forEach(clearQuestion);
         store.last[oid] = 0; save();
         toast('Прогресс олимпиады сброшен');
         go({ screen: 'quiz', oid, idx: 0, queue: null });
@@ -1136,6 +1187,13 @@
   app.addEventListener('change', (e) => {
     const el = e.target;
     if (!el.dataset || !el.dataset.input || view.screen !== 'quiz') return;
+    if (el.dataset.input === 'peek') {
+      store.settings.peek = el.checked; save();
+      renderQuiz();
+      document.getElementById('peek-switch')?.focus({ preventScroll: true });
+      toast(el.checked ? 'Ответы сразу: разбор можно открыть до ответа (без звёзд за вопрос)' : 'Разбор снова открывается после первой попытки');
+      return;
+    }
     const q = olymp().flat[view.idx];
     const resp = getResp(q);
     switch (el.dataset.input) {
@@ -1194,7 +1252,7 @@
     const r = rec(q);
     const locked = !!(r && (r.solved || r.revealed));
     if (e.key === 'Enter' && (tag === 'input' || !typing)) {
-      if (tag === 'button' || tag === 'a' || tag === 'summary') return;
+      if (tag === 'button' || tag === 'a' || tag === 'summary' || e.target.type === 'checkbox' && e.target.id === 'peek-switch') return;
       e.preventDefault();
       if (locked) move(1); else doCheck();
       return;

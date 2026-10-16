@@ -275,6 +275,15 @@ G7_TEXT = {
     ],
 }
 
+# Эталонные слова для подсказки «Показать первую букву» (сверяются с «Ответ:» в разборе).
+G7_WORDS = {
+    "p2-s2-q1": ["главным", "придаточным"],
+    "p2-s2-q2": ["споры"],
+    "p2-s2-q3": ["камбий"],
+    "p2-s2-q4": ["лист"],
+    "p2-s2-q5": ["околоплодник"],
+}
+
 G7_MATCH = {
     "p2-s3-q1": {"А": "3", "Б": "1", "В": "2"},
     "p2-s3-q2": {"А": "4", "Б": "5", "В": "1", "Г": "3", "Д": "2"},
@@ -403,7 +412,7 @@ def build_g7():
             stmts, opts = parse_cond_options(cond)
             q.update(type="single", statements=stmts, options=opts, answer=G7_T2[qid])
         elif qid in G7_TEXT:
-            q.update(type="text", blanks=G7_TEXT[qid])
+            q.update(type="text", blanks=[{**b, "word": w} for b, w in zip(G7_TEXT[qid], G7_WORDS[qid])])
             if stem.count("……") != len(G7_TEXT[qid]):
                 fail(f"{qid}: число пропусков в условии не совпадает с ключом")
         elif qid in G7_MATCH:
@@ -510,6 +519,9 @@ G8_TERMS = [
      "hints": [{"re": r"^позвоночн", "msg": "Позвоночник состоит из позвонков, а здесь — сплошной упругий стержень."}]},
 ]
 
+G8_TERM_WORDS = ["метаморфоз", "конъюгация", "гемолимфа", "регенерация", "мантия", "целом",
+                 "гетеротрофы", "промежуточный хозяин", "семенники", "хорда"]
+
 G8_TABLE_ROWS = [
     # (признак, варианты в клетке, индексы верных вариантов: рак, паук, насекомое)
     # Формулировки сокращены, чтобы помещались в клетку; полная эталонная таблица — в разборе.
@@ -605,7 +617,8 @@ def build_g8():
             if len(items) != len(G8_TERMS):
                 fail("число определений не совпадает с ключом")
             q.update(num="2", type="terms", stem=inner(ps[0]), note=inner(ps[1]),
-                     items=[{"key": str(i + 1), "html": h, **G8_TERMS[i]} for i, h in enumerate(items)])
+                     items=[{"key": str(i + 1), "html": h, "word": G8_TERM_WORDS[i], **G8_TERMS[i]}
+                            for i, h in enumerate(items)])
             sec["g8-a2"]["questions"].append(q)
         elif 3 <= qn <= 22:
             ps = cond.find_all("p")
@@ -799,6 +812,8 @@ def verify(g7, s7, g8, s8):
             for b, w in zip(q["blanks"], words):
                 if not any(re.match(r, normalize(w)) for r in b["accept"]):
                     problems.append(f"{q['id']}: эталон «{w}» не принимается проверкой")
+                if b["word"] != w:
+                    problems.append(f"{q['id']}: слово подсказки «{b['word']}» ≠ ответ «{w}»")
 
     # 8 класс: тесты — по ключу из обложки и по «Эталонному ответу»
     kg = s8.select_one(".keygrid")
@@ -832,6 +847,8 @@ def verify(g7, s7, g8, s8):
                     w = re.sub(r"\s*\(.*?\)", "", word).strip()
                     if not any(re.match(r, normalize(w)) for r in item["accept"]):
                         problems.append(f"{q['id']} п.{n}: эталон «{w}» не принимается проверкой")
+                    if item["word"] != w:
+                        problems.append(f"{q['id']} п.{n}: слово подсказки «{item['word']}» ≠ ответ «{w}»")
                 if len(found) != len(q["items"]):
                     problems.append(f"{q['id']}: в эталоне {len(found)} терминов")
             if q["type"] == "table":

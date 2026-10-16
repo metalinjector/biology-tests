@@ -281,6 +281,59 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   if (!/6 из 105/.test(stars)) fail('после работы над ошибками ожидалось 6 звёзд: ' + stars);
 }
 
+// --------------------------------------------------------------- 6. подсказка по буквам и «Ответы сразу»
+{
+  const { page } = await newPage();
+  const go = async (h) => { await page.goto(URL.replace(/#.*/, '') + h); await page.reload(); await page.waitForSelector('main'); };
+  await go('#g7-q26'); // главным; придаточным
+  if ((await page.locator('.hint-btn').count()) !== 2) fail('у двух пропусков должно быть две кнопки подсказки');
+  const labels = [];
+  for (let k = 0; k < 4; k++) {
+    const btn = page.locator('.hint-btn[data-i="0"]');
+    if (!(await btn.count())) break;
+    labels.push((await btn.textContent()).trim());
+    await btn.click();
+  }
+  const want = ['Показать первую букву', 'Показать вторую букву', 'Показать третью букву'];
+  if (JSON.stringify(labels) !== JSON.stringify(want)) fail('кнопки подсказки: ' + JSON.stringify(labels));
+  if (!(await page.locator('.hint-end').count())) fail('после трёх букв нет надписи «Больше подсказок нет»');
+  const ph = await page.getAttribute('#blank-g7-p2-s2-q1-0', 'placeholder');
+  if (ph !== 'гла…') fail('подсказка в поле: ' + ph);
+  if (!/«гла…»/.test(await page.textContent('.hint-letters'))) fail('не показаны открытые буквы');
+  await page.fill('#blank-g7-p2-s2-q1-0', 'главным');
+  await page.fill('#blank-g7-p2-s2-q1-1', 'придаточным');
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  let n = await page.locator('.slide-stars span:not(.off)').count();
+  if (n !== 2) fail('с подсказкой ожидалось 2 звезды, а их ' + n);
+  if (await page.locator('.hint-btn').count()) fail('после верного ответа кнопки подсказок должны исчезнуть');
+  await go('#g7-q29'); // «лист»: максимум три буквы, слово целиком не раскрывается
+  for (let k = 0; k < 3; k++) await page.click('.hint-btn[data-i="0"]');
+  if (await page.getAttribute('#blank-g7-p2-s2-q4-0', 'placeholder') !== 'лис…') fail('подсказка для «лист»');
+  await go('#g8-q2');
+  if ((await page.locator('.hint-btn').count()) !== 10) fail('у каждого из 10 терминов должна быть подсказка');
+  await page.click('.hint-btn[data-i="7"]');
+  if (await page.getAttribute('#term-g8-q2-7', 'placeholder') !== 'п…') fail('подсказка у термина 8');
+
+  // «Ответы сразу»
+  await go('#g7-q2');
+  if (!(await page.locator('.drawer-head[aria-disabled="true"]').count())) fail('без переключателя разбор должен быть закрыт до попытки');
+  await page.click('label.switch');
+  await page.waitForSelector('#peek-switch:checked');
+  if (await page.locator('.drawer-head[aria-disabled="true"]').count()) fail('переключатель не открыл доступ к разбору');
+  await page.click('.drawer-head');
+  await page.waitForSelector('.drawer.is-open .answer-card');
+  if (!/Б\) пеницилл/.test(await page.textContent('.answer-card'))) fail('в учебном режиме не показан ответ');
+  await page.waitForSelector('.feedback.fb-info');
+  n = await page.locator('.slide-stars span:not(.off)').count();
+  if (n !== 0) fail('ответ, открытый до попытки, не должен давать звёзд');
+  await go('#g7-q5'); // настройка запоминается
+  if (!(await page.locator('#peek-switch:checked').count())) fail('переключатель не сохранился');
+  await page.click('label.switch');
+  await page.waitForSelector('.drawer-head[aria-disabled="true"]');
+  await shot(page, 'peek-off');
+}
+
 await browser.close();
 if (problems.length) {
   console.log(`\nНайдено проблем: ${problems.length}`);
