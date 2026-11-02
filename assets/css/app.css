@@ -300,8 +300,8 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .qmap-sec > span { font-family: var(--font-mono); font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .qmap-dots { display: flex; gap: 4px; }
 .qdot {
-  width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface);
-  font-family: var(--font-mono); font-size: .72rem; font-weight: 600; color: var(--muted); cursor: pointer; padding: 0;
+  min-width: 28px; height: 28px; border-radius: 8px; border: 1.5px solid var(--line); background: var(--surface);
+  font-family: var(--font-mono); font-size: .72rem; font-weight: 600; color: var(--muted); cursor: pointer; padding: 0 5px; white-space: nowrap;
   display: grid; place-items: center; transition: transform .15s var(--ease);
 }
 .qdot:hover { transform: translateY(-1px); }
@@ -362,6 +362,9 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 /* утверждения-черновик (задание 2, 7 класс) */
 .statements { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .statements-hint { font-size: var(--step--1); color: var(--muted); margin: 0; }
+.stem-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; }
+.stem-list b { color: var(--accent); margin-right: 4px; }
+.steps8 { padding-left: 1.3em; display: grid; gap: 4px; }
 .stmt {
   display: grid; grid-template-columns: 2.1em minmax(0, 1fr); gap: 10px; align-items: start; width: 100%; text-align: left;
   padding: 9px 12px; border-radius: var(--r-sm); border: 1.5px dashed var(--line); background: transparent; cursor: pointer;
@@ -616,8 +619,8 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .expl figure img, .prose figure img { background: var(--plate); border: 1px solid var(--plate-line); border-radius: 12px; padding: 8px; max-height: 520px; width: auto; }
 .expl figcaption, .expl .cap, .prose figcaption, .prose .cap { font-size: .9rem; color: var(--muted); text-align: center; font-style: italic; max-width: 46em; justify-self: center; }
 .src-g7 svg text { font-family: "Tinos", "Liberation Serif", "Times New Roman", serif; }
-.src-g8 svg, .src-g8b svg { font-family: var(--font-body); }
-.src-g8b svg text { font-family: "Noto Sans", var(--font-body); }
+.src-g8 svg, .src-g8b svg, .src-r19 svg, .src-n16 svg, .src-obl svg { font-family: var(--font-body); }
+.src-g8b svg text, .src-n16 svg text, .src-obl svg text { font-family: "Noto Sans", var(--font-body); }
 .svgwrap { display: grid; justify-items: center; }
 .svgwrap + .cap { margin-top: 6px; }
 
@@ -634,10 +637,10 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .b-mem { --blk-c: var(--c-violet); }
 .b-viz { --blk-c: var(--c-green); background: var(--surface); }
 .b-hor { --blk-c: var(--c-teal); }
-.src-g8 span.ok { color: var(--ok); font-weight: 700; }
-.src-g8 span.no { color: var(--bad); font-weight: 700; }
-.src-g8 li.is-picked, .src-g8b li.is-picked { padding: 4px 8px; margin-left: -8px; border-radius: 8px; background: var(--bad-tint); }
-.src-g8 li.is-picked::before, .src-g8b li.is-picked::before { content: "твой выбор · "; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }
+.expl span.ok, .prose span.ok { color: var(--ok); font-weight: 700; }
+.expl span.no, .prose span.no { color: var(--bad); font-weight: 700; }
+.expl:not(.src-g7) li.is-picked { padding: 4px 8px; margin-left: -8px; border-radius: 8px; background: var(--bad-tint); }
+.expl:not(.src-g7) li.is-picked::before { content: "твой выбор · "; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .06em; text-transform: uppercase; color: var(--bad); }
 .rule { display: flex; gap: 10px; align-items: flex-start; margin-top: 10px; padding: 10px 14px; border-radius: 10px; background: color-mix(in oklab, var(--c-orange) 16%, var(--surface)); border: 1.5px solid var(--c-orange); font-weight: 600; }
 .rule p { margin: 0; }
 .rule-ic { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--c-orange); color: var(--surface); font-weight: 800; }
@@ -764,3 +767,7 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
   border: 1.5px solid var(--line); background: var(--surface-2); font-size: 1rem; line-height: 1.5;
 }
 .open-draft:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in oklab, var(--accent) 25%, transparent); }
+
+/* дроби в зубных формулах */
+.frac { display: inline-flex; flex-direction: column; vertical-align: middle; text-align: center; font-size: .78em; line-height: 1.15; margin: 0 .15em; }
+.frac > span:first-child { border-bottom: 1px solid currentColor; padding: 0 .15em; }

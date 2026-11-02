@@ -74,6 +74,16 @@ def _katex_node(node):
             tag = "sub" if float(m.group(1)) > -2.8 else "sup"
             out.append(f"<{tag}>{content}</{tag}>")
         return "".join(out)
+    if "mfrac" in cls:
+        parts = []
+        for sp in node.select(".vlist > span"):
+            m = re.search(r"top:\s*(-?[\d.]+)em", sp.get("style", ""))
+            content = "".join(_katex_node(c) for c in sp.children).strip()
+            if m and content:
+                parts.append((float(m.group(1)), content))
+        parts.sort()  # числитель выше (меньше top)
+        if len(parts) == 2:
+            return f'<span class="frac"><span>{parts[0][1]}</span><span>{parts[1][1]}</span></span>'
     if "x-arrow" in cls:
         label = ""
         for sp in node.select(".x-arrow-pad"):
@@ -1117,6 +1127,508 @@ def verify_g8b(o, soup):
     return problems
 
 
+
+# ================================================================ районный этап 2019, Брестская область
+
+SRC_R19 = ROOT / "source" / "olimpiada-8-klass-raion-2019-brest.html"
+
+R19_SINGLE = {1: "3", 2: "1", 3: "2", 4: "2", 5: "3", 6: "2", 7: "б", 8: "1", 9: "г", 11: "а", 12: "б", 13: "б"}
+R19_Q10_ORDERS = ["Двукрылые", "Прямокрылые", "Чешуекрылые", "Жесткокрылые", "Полужесткокрылые"]
+R19_Q10 = {"Двукрылые": "5", "Прямокрылые": "3", "Чешуекрылые": "2", "Жесткокрылые": "1", "Полужесткокрылые": "4"}
+R19_Q14 = {"1": "В", "2": "Д", "3": "А", "4": "Г", "5": "Б"}
+R19_YES = {1, 2, 3, 4, 7, 9, 11}
+
+# Часть II: вписать слово. word — эталон для подсказки по буквам.
+R19_TERMS_LEAF = [
+    {"word": "сетчатое", "accept": [r"^(перисто )?(сетчат|перист)"],
+     "hints": [{"re": r"^(параллельн|дугов)", "msg": "Так жилки идут у однодольных. У листа А жилки ветвятся сеточкой."}]},
+    {"word": "параллельное", "accept": [r"^параллельн"],
+     "hints": [{"re": r"^(сетчат|перист)", "msg": "Лист В — злак, однодольное растение. Какие у злаков жилки?"},
+               {"re": r"^дугов", "msg": "Дуговое — у ландыша и подорожника. У злака жилки идут вдоль листа, не расходясь."}]},
+    {"word": "листовая пластинка", "accept": [r"^(листовая )?пластинк"],
+     "hints": [{"re": r"^лист$", "msg": "Лист — это весь орган. Как называется его широкая плоская часть?"}]},
+    {"word": "черешок", "accept": [r"^череш(ок|ка)$"], "hints": []},
+    {"word": "основание листа", "accept": [r"^(основание( листа)?|узел|узла)$"],
+     "hints": [{"re": r"^(междоузл|черешок)", "msg": "Цифра 3 — самое место прикрепления листа к стеблю."}]},
+    {"word": "прилистники", "accept": [r"^прилистник"], "hints": []},
+    {"word": "влагалище", "accept": [r"^влагалищ"],
+     "hints": [{"re": r"^(черешок|язычок)", "msg": "У злаков нижняя часть листа охватывает стебель трубкой. Как она называется?"}]},
+    {"word": "однодольные", "accept": [r"^однодольн"],
+     "hints": [{"re": r"^двудольн", "msg": "Параллельное жилкование и влагалище — признаки однодольных."},
+               {"re": r"^злак", "msg": "Злаки — семейство. А спрашивают класс."}]},
+    {"word": "покрытосеменные", "accept": [r"^(покрытосеменн|цветков)"],
+     "hints": [{"re": r"^двудольн", "msg": "Двудольные — это класс. А спрашивают отдел."}]},
+]
+R19_TERMS_PROT = [
+    {"word": "3", "accept": [r"^(3|три|третий|рисунок 3|на рисунке 3|эвглена( зеленая)?)$"],
+     "hints": [{"re": r"^(1|амеба)", "msg": "Амёба захватывает готовую пищу и не фотосинтезирует."}]},
+    {"word": "сократительная вакуоль", "accept": [r"^сократительн(ая|ой)( вакуол[ья])?$"],
+     "hints": [{"re": r"^порошиц", "msg": "Порошица на этом рисунке — цифра 4: рядом с ней наружу выходит облачко остатков пищи. Цифра 7 — светлый пузырёк с лучами-канальцами."},
+               {"re": r"^пищеварит", "msg": "Пищеварительные вакуоли на рисунке тёмные внутри. Цифра 7 — светлый пузырёк с лучами-канальцами."}]},
+    {"word": "малое ядро", "accept": [r"^(мало|микронуклеус)"],
+     "hints": [{"re": r"^(большое|макронуклеус)", "msg": "Большое ядро полиплоидное — в нём много наборов хромосом."}]},
+    {"word": "малярии", "accept": [r"^маляри"], "hints": []},
+    {"word": "конъюгация", "accept": [r"^конъюгаци"],
+     "near": [{"re": r"^кон[ь]?югаци", "msg": "Верно! Только пишется с твёрдым знаком: конъюгация."}],
+     "hints": [{"re": r"^копуляц", "msg": "Копуляция — слияние двух клеток в одну. У инфузорий клетки только обмениваются ядрами."}]},
+    {"word": "протисты", "accept": [r"^протист"],
+     "hints": [{"re": r"^(простейш|животн)", "msg": "Это старая система. В действующем учебнике — отдельное царство одноклеточных эукариот."}]},
+]
+R19_KEY_FIX_11 = ("<p><em>Уточнение к пункту 11.</em> В исходном разборе указана «порошица», но на этом рисунке "
+                  "цифра 5 обозначает большое ядро, 6 — малое ядро, а у цифры 4 наружу выходит облачко непереваренных "
+                  "остатков — это и есть порошица. Цифра 7 указывает на светлый пузырёк с лучами-канальцами в задней "
+                  "части клетки, то есть на <strong>сократительную вакуоль</strong>. Поэтому в тренажёре засчитывается "
+                  "«сократительная вакуоль».</p>")
+R19_TRAIN_NOTE_2 = (" <em>Олимпиадная оговорка: у четырёхногих (галловых) клещей во взрослом состоянии всего 2 пары ног, "
+                    "так что строго «у всех» не выполняется и здесь. Но из предложенных вариантов «б» — единственный, "
+                    "который верен почти для всех паукообразных; остальные ошибочны грубо.</em>")
+
+
+def split_numbered(p_html):
+    """«1) …; 2) …; 3) ….» → список вариантов с цифрами."""
+    txt = p_html.strip()
+    parts = re.split(r"(?:^|;\s*)(\d+)\)\s*", txt)
+    if parts[0].strip():
+        fail("неожиданное начало пунктов: " + txt[:60])
+    out = []
+    for i in range(1, len(parts), 2):
+        out.append({"key": parts[i], "html": parts[i + 1].strip().rstrip(".").strip()})
+    return out
+
+
+def build_r19():
+    raw = SRC_R19.read_text(encoding="utf-8")
+    soup = BeautifulSoup(raw, "lxml")
+    imgs = soup.find_all("img")
+    if len(imgs) != 3:
+        fail("районный 2019: ожидалось 3 картинки")
+    # 1-я и 2-я — паук и лист: берём чёткие полные копии из PDF-бланка (assets/img/r19-*.png),
+    # 3-я — протисты: сохраняем из разбора.
+    IMG_DIR.mkdir(parents=True, exist_ok=True)
+    m = re.match(r"data:image/(\w+);base64,(.*)", imgs[2]["src"], re.S)
+    (IMG_DIR / "r19-ch2-protisty.png").write_bytes(base64.b64decode(m.group(2)))
+    for img, name in zip(imgs, ["r19-t08-pauk.png", "r19-ch2-list.png", "r19-ch2-protisty.png"]):
+        img["src"] = "assets/img/" + name
+        img["loading"] = "lazy"
+        if "style" in img.attrs:
+            del img["style"]
+
+    data = {"id": "r19", "grade": 8, "year": "2019", "stage": "Районный этап, Брестская обл.",
+            "title": "Районный этап 2019, 8 класс",
+            "subtitle": "Районный этап · 2019 · 14 тестов, 15 вопросов по рисункам, 11 суждений",
+            "sections": [], "notes": []}
+    sections = [
+        {"id": "r19-p1", "title": "Часть I — Тесты", "short": "Часть I · тесты", "questions": []},
+        {"id": "r19-p2", "title": "Часть II — Рисунки: лист и протисты", "short": "Часть II · рисунки", "questions": []},
+        {"id": "r19-p3", "title": "Часть III — Суждения «да» или «нет»", "short": "Часть III · да/нет", "questions": []},
+        {"id": "r19-train", "title": "Бонус · Тренажёр на перенос знаний", "short": "Бонус · тренажёр", "questions": []},
+    ]
+    sec = {x["id"]: x for x in sections}
+    cover = soup.select_one("section.cover")
+    idea, keygrid, legend = cover.select_one(".idea"), cover.select_one(".keygrid"), cover.select_one(".legend")
+    legend_note = legend.find_next_sibling("p")
+
+    for qs in soup.select("section.q"):
+        qn = int(qs["id"][1:])
+        head = text_of(qs.select_one(".qnum"))
+        topic = text_of(qs.select_one(".qh h2"))
+        cond = qs.select_one(".b-cond .bb")
+        ans = qs.select_one(".b-ans .bb")
+        blocks = "".join(str(b) for cls in G8_BLOCK_ORDER for b in qs.select(".blk." + cls))
+        qid = f"r19-q{qn}"
+        ef = frag(blocks, qid + "e")
+        mark_option_rows(ef)
+        q = {"id": qid, "src": "r19", "topic": topic, "head": head, "media": "",
+             "explanation": str(ef).strip(), "answerHtml": str(frag(inner(ans), qid + "a")).strip()}
+        ps = cond.find_all("p", recursive=False)
+        orig = cond.select_one(".orig")
+
+        def stem_of(p_):
+            h = re.sub(r"^\s*<strong>[^<]*</strong>\s*", "", inner(p_))
+            return h.strip()
+
+        if qn <= 13 and qn != 10:
+            q["num"] = str(qn)
+            q["head"] = f"Тест {qn}"
+            q["stem"] = stem_of(ps[0])
+            if qn in (9, 11, 12, 13):
+                q["statements"] = split_numbered(inner(ps[1]))
+                q["options"] = split_options(inner(ps[2]))
+            elif qn == 7:
+                q["options"] = split_options(inner(ps[1]))
+            else:
+                q["options"] = split_numbered(inner(ps[-1]))
+            q["type"] = "single"
+            q["answer"] = R19_SINGLE[qn]
+            if orig is not None:
+                q["media"] = str(frag(f'<figure class="cond-figure">{inner(orig)}<figcaption>Рисунок из бланка (чёткая копия из PDF-бланка олимпиады): цифра 1 — у заднего конца брюшка.</figcaption></figure>', qid + "m"))
+            sec["r19-p1"]["questions"].append(q)
+        elif qn == 10:
+            reps = split_numbered(inner(ps[1]))
+            q.update(num="10", head="Тест 10", stem=stem_of(ps[0]), type="match",
+                     left=[{"key": o, "html": o} for o in R19_Q10_ORDERS], right=reps,
+                     leftTitle="Отряд", rightTitle="Представитель", hideLeftKey=True, answer=R19_Q10)
+            sec["r19-p1"]["questions"].append(q)
+        elif qn == 14:
+            table = cond.find("table")
+            left, right = [], []
+            for tr in table.select("tbody tr"):
+                a, b = tr.find_all("td")
+                ma = re.match(r"\s*(\d)\s*[–-]\s*(.*)", a.get_text(" ", strip=True))
+                mb = re.match(r"\s*([А-Д])\)\s*(.*)", b.get_text(" ", strip=True))
+                left.append({"key": ma.group(1), "html": html.escape(ma.group(2))})
+                right.append({"key": mb.group(1), "html": html.escape(mb.group(2))})
+            q.update(num="14", head="Тест 14", stem=stem_of(ps[0]), type="match", left=left, right=right,
+                     leftTitle="Группа", rightTitle="Органы выделения", answer=R19_Q14)
+            sec["r19-p1"]["questions"].append(q)
+        elif qn in (15, 16):
+            items = [inner(li) for li in cond.select("ol > li")]
+            specs = R19_TERMS_LEAF if qn == 15 else R19_TERMS_PROT
+            if len(items) != len(specs):
+                fail(f"районный 2019, q{qn}: число пунктов не совпадает")
+            items = [re.sub(r"\s*_{2,}\s*$", "", h).strip() + " …" for h in items]
+            q.update(num="II.1" if qn == 15 else "II.2", head="Часть II · " + ("пункты 1–9" if qn == 15 else "пункты 10–15"),
+                     stem=("Ответ (1 или 2 слова или цифру) впиши рядом с номером пункта." if qn == 15
+                           else "Рисунки 1–4. Ответ (1 или 2 слова или цифру) впиши рядом с номером пункта."),
+                     type="terms",
+                     items=[{"key": str(i + (1 if qn == 15 else 10)), "html": h, **specs[i]} for i, h in enumerate(items)])
+            fig = f'<figure class="cond-figure">{inner(orig)}<figcaption>' + (
+                "Рисунок из бланка: листья А, Б и В (полная копия из PDF-бланка; в разборе рисунок был обрезан справа)."
+                if qn == 15 else "Рисунки 1–4 из бланка.") + "</figcaption></figure>"
+            q["media"] = str(frag(fig, qid + "m"))
+            if qn == 16:
+                fixed = q["answerHtml"].replace("<td><strong>порошица</strong></td>",
+                                                "<td><strong>сократительная вакуоль</strong> <em>(уточнено, см. ниже)</em></td>")
+                if fixed == q["answerHtml"]:
+                    fail("районный 2019: не найден пункт 11 в таблице ответов")
+                q["answerHtml"] = fixed + R19_KEY_FIX_11
+                q["explanation"] = f'<div class="blk b-ans"><div class="bl"><span class="bn">!</span>Уточнение к ключу</div><div class="bb">{R19_KEY_FIX_11}</div></div>' + q["explanation"]
+            sec["r19-p2"]["questions"].append(q)
+        elif qn == 17:
+            items = [inner(li) for li in cond.select("ol > li")]
+            q.update(num="III", head="Часть III · суждения 1–11", type="match", style="segmented",
+                     stem="Согласись с каждым суждением или отклони его: «да» или «нет».",
+                     left=[{"key": str(i + 1), "html": f"<b>{i + 1}.</b> {h}"} for i, h in enumerate(items)],
+                     right=[{"key": "да", "html": "да"}, {"key": "нет", "html": "нет"}],
+                     leftTitle="Суждение", rightTitle="Ответ",
+                     answer={str(i + 1): ("да" if i + 1 in R19_YES else "нет") for i in range(len(items))})
+            sec["r19-p3"]["questions"].append(q)
+        else:
+            fail("районный 2019: лишнее задание q%d" % qn)
+
+    # --- итоговые разделы
+    fins = {f["id"]: f for f in soup.select("section.fin")}
+    f4 = fins["fin4"]
+    trains, key_items = f4.select(".train"), f4.select(".keys li")
+    train_answers = ["в", "б", "в", "б"]
+    if len(trains) != 4 or len(key_items) != 4:
+        fail("районный 2019: тренажёр")
+    for i, (tr, key) in enumerate(zip(trains, key_items)):
+        ps = tr.find_all("p")
+        mm = re.match(r"\s*<strong>(.*?)</strong>\s*(.*)", inner(ps[0]), re.S)
+        kind = re.sub(r"<[^>]+>", "", mm.group(1)).strip()
+        mk = re.search(r"\((.*)\)", kind)
+        kind = mk.group(1)[:1].upper() + mk.group(1)[1:] if mk else kind
+        key_html = inner(key) + (R19_TRAIN_NOTE_2 if i == 1 else "")
+        kf = frag(key_html, f"r19-t{i + 1}a")
+        kl = re.match(r"\s*([а-ж])\)", kf.get_text())
+        if not kl or kl.group(1) != train_answers[i]:
+            fail(f"районный 2019: ключ тренажёра {i + 1} не совпадает")
+        sec["r19-train"]["questions"].append(
+            {"id": f"r19-t{i + 1}", "src": "r19", "num": str(i + 1), "head": kind, "type": "single",
+             "stem": mm.group(2).strip(), "options": split_options(inner(ps[1])), "answer": train_answers[i],
+             "media": "", "explanation": "", "answerHtml": str(kf)})
+
+    def fin_html(fid, prefix):
+        f = fins[fid]
+        h2_ = f.find("h2")
+        h2_.extract()
+        return str(frag(inner(f), prefix))
+
+    data["notes"] = [
+        {"id": "r19-idea", "title": "Как устроен разбор",
+         "html": f'<div class="idea">{inner(idea)}</div><h3>Восемь шагов разбора</h3>'
+                 + str(frag(str(legend), "r19n1")) + str(frag(str(legend_note), "r19n2"))},
+        {"id": "r19-cheat", "title": "Экспресс-шпаргалка", "html": fin_html("fin1", "r19f1")},
+        {"id": "r19-dict", "title": "Словарь корней", "html": fin_html("fin2", "r19f2")},
+        {"id": "r19-cards", "title": "Карточки (лист для печати)", "html": fin_html("fin3", "r19f3")},
+        {"id": "r19-key", "title": "Ключ ответов", "spoiler": True,
+         "html": str(frag(str(keygrid), "r19n3")) + R19_KEY_FIX_11},
+    ]
+    data["cards"] = [{"front": inner(c.select_one(".f")), "back": inner(c.select_one(".r"))} for c in fins["fin3"].select(".card")]
+    dict_cards = []
+    for tr in fins["fin2"].select("table tr"):
+        tds = tr.find_all("td")
+        if len(tds) == 3:
+            dict_cards.append({"front": inner(tds[0]), "back": inner(tds[1]) + (
+                "" if tds[2].get_text(strip=True) in ("—", "") else " — " + inner(tds[2]))})
+    data["dictCards"] = dict_cards
+    data["sections"] = sections
+    return data, soup
+
+
+def verify_r19(o, soup):
+    """Сверка с ключом ответов на обложке разбора (с одним документированным уточнением, пункт 11)."""
+    problems = []
+    kg = soup.select_one(".keygrid")
+    txt = kg.get_text(" ", strip=True)
+    t1 = o["sections"][0]["questions"]
+    for q in t1:
+        if q["type"] == "single":
+            at = BeautifulSoup(q["answerHtml"], "html.parser").get_text(" ", strip=True)
+            if not at.startswith(q["answer"] + ")"):
+                problems.append(f"{q['id']}: эталон «{at[:40]}» ≠ ключ {q['answer']}")
+            if q["answer"] not in [x["key"] for x in q["options"]]:
+                problems.append(f"{q['id']}: ответа нет среди вариантов")
+    tbl = kg.find("table")
+    cells = [td.get_text(" ", strip=True) for td in tbl.find_all("td")]
+    key = {}
+    for i in range(0, len(cells) - 1, 2):
+        key[cells[i]] = cells[i + 1]
+    for n, a in R19_SINGLE.items():
+        if key.get(str(n), "").rstrip("*").strip() != a:
+            problems.append(f"районный 2019, тест {n}: на обложке «{key.get(str(n))}», в ключе {a}")
+    if key.get("10", "").rstrip("*").replace(" ", "") != "5,3,2,1,4":
+        problems.append("районный 2019, тест 10 на обложке изменился")
+    order = [R19_Q10[x] for x in R19_Q10_ORDERS]
+    if order != ["5", "3", "2", "1", "4"]:
+        problems.append("районный 2019, тест 10: ключ")
+    q14 = next(q for q in t1 if q["num"] == "14")
+    at = BeautifulSoup(q14["answerHtml"], "html.parser").get_text(" ", strip=True)
+    if dict(re.findall(r"(\d) – ([А-Д])", at)) != R19_Q14:
+        problems.append("районный 2019, тест 14: эталон не совпадает")
+    yes = re.search(r"да:\s*([\d,\s]+)", txt)
+    if not yes or {int(x) for x in re.findall(r"\d+", yes.group(1))} != R19_YES:
+        problems.append("районный 2019, часть III: «да» не совпадает с ключом")
+    # часть II: эталоны из таблиц ответов принимаются проверкой
+    for q, specs in zip(o["sections"][1]["questions"], (R19_TERMS_LEAF, R19_TERMS_PROT)):
+        rows = BeautifulSoup(q["answerHtml"], "html.parser").select("tbody tr")
+        for tr, spec in zip(rows, specs):
+            n, word = [td.get_text(" ", strip=True) for td in tr.find_all("td")]
+            w = re.sub(r"\s*\(.*?\)", "", word).strip()
+            if n == "11":
+                continue  # исправлено: см. R19_KEY_FIX_11
+            if not any(re.match(r, normalize(w)) for r in spec["accept"]):
+                problems.append(f"районный 2019, часть II п.{n}: эталон «{w}» не принимается")
+        for spec in specs:
+            if not any(re.match(r, normalize(spec["word"])) for r in spec["accept"]):
+                problems.append(f"районный 2019: слово подсказки «{spec['word']}» не принимается")
+    return problems
+
+
+# ================================================================ авторские разборы (2016 и областной этап)
+# К этим бланкам готового разбора не было: тексты 8 шагов написаны в tools/authored/*.py
+# в простой разметке и собираются здесь в тот же формат, что и разобранные олимпиады.
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from authored import common as AC  # noqa: E402
+from authored import olymp_2016_a, olymp_2016_b, olymp_2016_c, olymp_2016_d  # noqa: E402
+from authored import oblast_a, oblast_b, oblast_c, oblast_d  # noqa: E402
+
+STEPS_HTML = ("<h3>Восемь шагов разбора</h3><ol class=\"steps8\">"
+              "<li><b>Условие</b> — задание дословно из бланка, с рисунком.</li>"
+              "<li><b>Ответ</b> — правильный вариант и короткое обоснование.</li>"
+              "<li><b>Алгоритм олимпиадного мышления</b> — маркеры в условии и цепочка рассуждений.</li>"
+              "<li><b>Послойное объяснение</b> — механизм и разбор каждого неверного варианта.</li>"
+              "<li><b>Ловушки</b> — где чаще всего ошибаются.</li>"
+              "<li><b>Как запомнить</b> — таблицы, этимология, подсказки.</li>"
+              "<li><b>Визуализация</b> — схема или рисунок.</li>"
+              "<li><b>Олимпиадный горизонт</b> — что ещё полезно знать по теме.</li></ol>")
+
+
+def _rich(t):
+    """Строка условия: готовый HTML оставляем, простой текст экранируем."""
+    return t if re.search(r"<\w", t) else AC._inline(t)
+
+
+def _kv(pairs):
+    return [{"key": k, "html": AC._inline(t)} for k, t in pairs]
+
+
+def authored_q(src, qid, d, head):
+    typ = d.get("type", "single")
+    q = {"id": qid, "src": src, "num": d["num"], "head": head, "topic": d.get("topic", ""), "type": typ}
+    stem = _rich(d["stem"])
+    if d.get("statements") and d.get("inline_statements"):
+        stem += '<ol class="stem-list">' + "".join(
+            f"<li><b>{html.escape(k)})</b> {AC._inline(t)}</li>" for k, t in d["statements"]) + "</ol>"
+    q["stem"] = stem
+    media = ""
+    if d.get("media_img"):
+        name, cap = d["media_img"]
+        if not (IMG_DIR / name).exists():
+            fail(f"{qid}: нет картинки {name}")
+        media = (f'<figure class="cond-figure"><img src="assets/img/{name}" alt="{html.escape(cap, quote=True)}" '
+                 f'loading="lazy" decoding="async"><figcaption>{html.escape(cap)}</figcaption></figure>')
+    q["media"] = media
+    if d.get("statements") and not d.get("inline_statements"):
+        q["statements"] = _kv(d["statements"])
+    if d.get("options"):
+        q["options"] = _kv(d["options"])
+    if typ == "match":
+        q["left"] = _kv(d["left"])
+        q["right"] = _kv(d["right"])
+    for k in ("answer", "alsoAccept", "acceptSets", "setNote", "instructions", "altAnswers", "leftTitle",
+              "rightTitle", "hideLeftKey", "style", "blanks", "imgRows"):
+        if k in d:
+            q[k] = d[k]
+    if "instructions" in q:
+        q["instructions"] = re.sub(r"<[^>]+>", "", q["instructions"])
+    ef = frag(AC.explanation(d), qid + "e")
+    mark_option_rows(ef)
+    q["explanation"] = str(ef)
+    q["answerHtml"] = str(frag(d["answer_html"], qid + "a"))
+    return q
+
+
+def authored_train(src, prefix, items):
+    out = []
+    for i, d in enumerate(items):
+        out.append({"id": f"{prefix}-t{i + 1}", "src": src, "num": d["num"], "head": d["head"], "type": "single",
+                    "stem": _rich(d["stem"]), "options": _kv(d["options"]), "answer": d["answer"], "media": "",
+                    "explanation": "", "answerHtml": str(frag(d["answer_html"], f"{prefix}-t{i + 1}a"))})
+    return out
+
+
+def authored_notes(prefix, mod):
+    dict_tbl = ("<table><thead><tr><th>Термин</th><th>Корень</th><th>Значение</th></tr></thead><tbody>"
+                + "".join(f"<tr><td><strong>{html.escape(a)}</strong></td><td>{html.escape(b)}</td><td>{html.escape(c)}</td></tr>"
+                          for a, b, c in mod.DICT) + "</tbody></table>")
+    cards_tbl = ("<table><thead><tr><th>Вопрос</th><th>Ответ</th></tr></thead><tbody>"
+                 + "".join(f"<tr><td>{AC._inline(a)}</td><td>{AC._inline(b)}</td></tr>" for a, b in mod.CARDS)
+                 + "</tbody></table>")
+    notes = [
+        {"id": f"{prefix}-about", "title": "Об этой олимпиаде",
+         "html": str(frag(AC.md(mod.NOTES_ABOUT) + STEPS_HTML, f"{prefix}n1"))},
+        {"id": f"{prefix}-cheat", "title": "Экспресс-шпаргалка и ответы", "spoiler": True,
+         "html": str(frag(AC.md(mod.CHEAT), f"{prefix}n2"))},
+        {"id": f"{prefix}-dict", "title": "Словарь корней", "html": str(frag(dict_tbl, f"{prefix}n3"))},
+        {"id": f"{prefix}-cards", "title": "Карточки (таблица)", "html": str(frag(cards_tbl, f"{prefix}n4"))},
+    ]
+    cards = [{"front": AC._inline(a), "back": AC._inline(b)} for a, b in mod.CARDS]
+    dict_cards = [{"front": html.escape(a), "back": html.escape(b) + ("" if c in ("—", "") else " — " + html.escape(c))}
+                  for a, b, c in mod.DICT]
+    return notes, cards, dict_cards
+
+
+def build_n16():
+    data = {"id": "n16", "grade": 8, "year": "2016", "stage": "Олимпиадные задания",
+            "title": "Олимпиада 8 класса, 2016",
+            "subtitle": "Олимпиадные задания · 2016 · 30 тестов, рисунки, задачи и «исключения»",
+            "authored": True}
+    tests = [authored_q("n16", f"n16-q{d['num']}", d, f"Тест {d['num']}")
+             for m in (olymp_2016_a, olymp_2016_b, olymp_2016_c) for d in m.Q]
+    pract = [authored_q("n16", "n16-p" + re.sub(r"\W", "", d["num"]).lower(), d, d["head"]) for d in olymp_2016_d.PRACT]
+    data["sections"] = [
+        {"id": "n16-test", "title": "Задание 1 — Тесты (№ 1–30)", "short": "Тесты 1–30", "questions": tests},
+        {"id": "n16-pract", "title": "Задания II–IV — Рисунки, задачи и исключения", "short": "Практика II–IV", "questions": pract},
+        {"id": "n16-train", "title": "Бонус · Тренажёр на перенос знаний", "short": "Бонус · тренажёр",
+         "questions": authored_train("n16", "n16", olymp_2016_d.TRAIN)},
+    ]
+    data["notes"], data["cards"], data["dictCards"] = authored_notes("n16", olymp_2016_d)
+    return data
+
+
+def build_obl():
+    data = {"id": "obl", "grade": 8, "year": "", "label": "8 класс · областной", "stage": "Областной этап",
+            "title": "Областной этап, 8 класс",
+            "subtitle": "Областной этап · 8 класс · 36 заданий части I и 2 задания части II",
+            "blurb": "36 заданий части I и 2 задания части II", "authored": True}
+    allq = [authored_q("obl", f"obl-q{d['num']}", d, f"Задание {d['num']}")
+            for m in (oblast_a, oblast_b, oblast_c) for d in m.Q]
+    by = lambda lo, hi: [q for q in allq if lo <= int(q["num"]) <= hi]  # noqa: E731
+    pract = [authored_q("obl", "obl-p" + re.sub(r"\W", "", d["num"]).lower(), d, d["head"]) for d in oblast_d.PRACT]
+    data["sections"] = [
+        {"id": "obl-p1a", "title": "Часть I — Задания 1–22: тесты и последовательность", "short": "Часть I · 1–22", "questions": by(1, 22)},
+        {"id": "obl-p1b", "title": "Часть I — Задания 23–25: нарисуй и дай определение", "short": "Часть I · 23–25 открытые", "questions": by(23, 25)},
+        {"id": "obl-p1c", "title": "Часть I — Задания 26–36: животные и ткани", "short": "Часть I · 26–36", "questions": by(26, 36)},
+        {"id": "obl-p2", "title": "Часть II — Суждения и двойное дыхание птиц", "short": "Часть II", "questions": pract},
+        {"id": "obl-train", "title": "Бонус · Тренажёр на перенос знаний", "short": "Бонус · тренажёр",
+         "questions": authored_train("obl", "obl", oblast_d.TRAIN)},
+    ]
+    if sum(len(s["questions"]) for s in data["sections"][:3]) != 36:
+        fail("областной этап: ожидалось 36 заданий части I")
+    data["notes"], data["cards"], data["dictCards"] = authored_notes("obl", oblast_d)
+    return data
+
+
+def verify_authored(o):
+    """Самопроверка авторских ключей: ответ есть среди вариантов, эталон в «Ответе»
+    совпадает с ключом, засчитываемые наборы корректны, эталон принимается проверкой."""
+    problems = []
+    for s in o["sections"]:
+        for q in s["questions"]:
+            at = BeautifulSoup(q["answerHtml"], "html.parser").get_text(" ", strip=True)
+            qi = f"{q['id']} ({q['num']})"
+            if q["type"] == "single":
+                keys = [x["key"] for x in q["options"]]
+                if q["answer"] not in keys:
+                    problems.append(f"{qi}: ответа нет среди вариантов")
+                if not at.startswith(q["answer"] + ")"):
+                    problems.append(f"{qi}: эталон «{at[:30]}» ≠ ключ {q['answer']}")
+                for k in q.get("alsoAccept", {}):
+                    if k not in keys or k == q["answer"]:
+                        problems.append(f"{qi}: дополнительный ответ {k} некорректен")
+                stm = [x["key"] for x in q.get("statements", [])]
+                if stm:
+                    opt = next(x for x in q["options"] if x["key"] == q["answer"])
+                    toks = re.findall(r"\d+|[а-яё]", BeautifulSoup(opt["html"], "html.parser").get_text())
+                    if not toks or not all(t in stm for t in toks):
+                        problems.append(f"{qi}: вариант-ответ ссылается на несуществующий пункт")
+            elif q["type"] == "multi":
+                keys = [x["key"] for x in q["options"]]
+                sets = q.get("acceptSets") or [q["answer"]]
+                if sets[0] != q["answer"]:
+                    problems.append(f"{qi}: основной набор не совпадает с ответом")
+                for st in sets:
+                    if not st or not all(k in keys for k in st):
+                        problems.append(f"{qi}: набор {st} ссылается на несуществующий пункт")
+                nums = re.findall(r"\d+", at.split("—")[0])
+                if nums != q["answer"]:
+                    problems.append(f"{qi}: эталон {nums} ≠ ключ {q['answer']}")
+            elif q["type"] == "match":
+                lk, rk = [x["key"] for x in q["left"]], [x["key"] for x in q["right"]]
+                if sorted(q["answer"]) != sorted(lk):
+                    problems.append(f"{qi}: в ключе не все строки")
+                for k, v in q["answer"].items():
+                    if v not in rk:
+                        problems.append(f"{qi}: битая пара {k}-{v}")
+                for k, alts in q.get("altAnswers", {}).items():
+                    for v in alts:
+                        if k not in lk or v not in rk or v == q["answer"][k]:
+                            problems.append(f"{qi}: битый допустимый ответ {k}-{v}")
+                pairs = re.findall(r"([А-ЗA-Z0-9])(\d|[а-к])(?=\s|$|[,.;:])", at.split(":")[0].split(" — ")[0])
+                if len(pairs) != len(q["answer"]):
+                    # «1 — г) почка; 2 — к) …» или «1 (бактерии) — в, д; 2 (грибы) — а» или «Верно (+): 2, 3…»
+                    pairs = re.findall(r"(\d+) — ([а-к])\)", at)
+                    if not pairs:
+                        for grp, lets in re.findall(r"(\d+) \([^)]*\) — ([а-к](?:, [а-к])*)", at):
+                            pairs += [(x, grp) for x in lets.split(", ")]
+                    if not pairs:
+                        for sign, nums in re.findall(r"\(([+−])\): ([\d, ]+)", at):
+                            pairs += [(x, "+" if sign == "+" else "-") for x in re.findall(r"\d+", nums)]
+                if len(pairs) != len(q["answer"]) or dict(pairs) != q["answer"]:
+                    problems.append(f"{qi}: эталон {pairs} ≠ ключ")
+            elif q["type"] == "text":
+                ref = re.sub(r"\D", "", at.split("=")[0].split(":")[0])
+                for b in q["blanks"]:
+                    if not any(re.match(r, normalize(ref)) for r in b["accept"]):
+                        problems.append(f"{qi}: эталон «{ref}» не принимается проверкой")
+                    for h in b.get("hints", []):
+                        if any(re.match(r, normalize(ref)) for r in [h["re"]]):
+                            problems.append(f"{qi}: подсказка «{h['re']}» перехватывает правильный ответ")
+                if q["stem"].count("……") != len(q["blanks"]):
+                    problems.append(f"{qi}: число пропусков в условии ≠ числу полей")
+            elif q["type"] != "open":
+                problems.append(f"{qi}: неизвестный тип {q['type']}")
+            for key in ("b-algo", "b-expl", "b-traps", "b-mem", "b-viz", "b-hor"):
+                if s["id"].endswith("-train"):
+                    break
+                if key not in q["explanation"]:
+                    problems.append(f"{qi}: в разборе нет блока {key}")
+    return problems
+
+
 # ================================================================ проверка
 
 def verify(g7, s7, g8, s8):
@@ -1243,16 +1755,19 @@ def main():
     g7, s7 = build_g7()
     g8, s8 = build_g8()
     g8b, s8b = build_g8b()
-    problems = verify(g7, s7, g8, s8) + verify_g8b(g8b, s8b)
+    r19, sr19 = build_r19()
+    n16, obl = build_n16(), build_obl()
+    problems = (verify(g7, s7, g8, s8) + verify_g8b(g8b, s8b) + verify_r19(r19, sr19)
+                + verify_authored(n16) + verify_authored(obl))
     if problems:
         print("\n".join(problems), file=sys.stderr)
         fail(f"проверка ключей не пройдена ({len(problems)})")
-    payload = {"olympiads": [g7, g8, g8b]}
+    payload = {"olympiads": [g7, g8, g8b, r19, n16, obl]}
     js = ("/* Сгенерировано tools/build_data.py из файлов в source/. Не редактировать вручную. */\n"
           "window.OLYMPIAD_DATA = " + json.dumps(payload, ensure_ascii=False, separators=(",", ":")) + ";\n")
     OUT_JS.parent.mkdir(parents=True, exist_ok=True)
     OUT_JS.write_text(js, encoding="utf-8")
-    nq = sum(len(s["questions"]) for o in (g7, g8, g8b) for s in o["sections"])
+    nq = sum(len(s["questions"]) for o in payload["olympiads"] for s in o["sections"])
     print(f"Готово: {OUT_JS.relative_to(ROOT)}; вопросов: {nq}, {len(js) // 1024} КБ; ключи сверены.")
 
 

@@ -51,6 +51,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
     qs: o.sections.flatMap((s) => s.questions.map((q) => ({
       id: q.id, type: q.type, answer: q.answer, num: q.num,
       blanks: q.blanks ? q.blanks.length : 0, items: q.items ? q.items.length : 0,
+      blankWords: q.blanks ? q.blanks.map((b) => b.word) : [], itemWords: q.items ? q.items.map((b) => b.word) : [],
       answerText: q.answerHtml.replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim(),
       rows: q.rows ? q.rows.map((r) => r.key) : null, cols: q.columns ? q.columns.map((c) => c.key) : null,
       style: q.style || '', svg: (q.explanation.match(/<svg/g) || []).length,
@@ -74,12 +75,14 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
           break;
         case 'text': {
           const words = q.answerText.split(';').map((w) => w.replace(/\.$/, '').trim());
-          for (let b = 0; b < q.blanks; b++) await page.fill(`#blank-${q.id}-${b}`, words[b]);
+          // числовой ответ (слова для подсказки нет) — берём числа из начала эталона
+          const num = (q.answerText.match(/^\d[\d,\s]*/) || [''])[0].trim();
+          for (let b = 0; b < q.blanks; b++) await page.fill(`#blank-${q.id}-${b}`, q.blankWords[b] || num || words[b]);
           break;
         }
         case 'terms': {
           const found = [...q.answerText.matchAll(/(\d+) — (.*?)(?:;|\.$|$)/g)].map((m) => m[2].replace(/\s*\(.*?\)/, '').trim());
-          for (let b = 0; b < q.items; b++) await page.fill(`#term-${q.id}-${b}`, found[b]);
+          for (let b = 0; b < q.items; b++) await page.fill(`#term-${q.id}-${b}`, q.itemWords[b] || found[b]);
           break;
         }
         case 'match':
@@ -184,7 +187,9 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
 {
   const { page } = await newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: 'dark' });
   const routes = ['', '#g7-q1', '#g7-q22', '#g7-q34', '#g7-q35', '#g8-q2', '#g8-q25', '#g8-q26', '#g7-pamyatki', '#g8-pamyatki', '#kartochki-self', '#g8-itogi',
-    '#g8b-q10', '#g8b-q15', '#g8b-q30', '#g8b-q31', '#g8b-q32', '#g8b-q33', '#g8b-q36', '#g8b-pamyatki'];
+    '#g8b-q10', '#g8b-q15', '#g8b-q30', '#g8b-q31', '#g8b-q32', '#g8b-q33', '#g8b-q36', '#g8b-pamyatki',
+    '#r19-q8', '#r19-q15', '#r19-q17', '#n16-q5', '#n16-q30', '#n16-q31', '#n16-q34', '#n16-q36', '#n16-pamyatki',
+    '#obl-q19', '#obl-q22', '#obl-q23', '#obl-q27', '#obl-q34', '#obl-q35', '#obl-q37', '#obl-q38', '#obl-pamyatki', '#obl-itogi'];
   for (const r of routes) {
     await page.goto(URL.replace(/#.*/, '') + r);
     await page.reload();
@@ -192,7 +197,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
     await page.waitForTimeout(150);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (over > 1) fail(`горизонтальная прокрутка на телефоне (${r || 'главная'}): +${over}px`);
-    if (['', '#g8-q25', '#g7-q34', '#g8b-q31', '#g8b-q33'].includes(r)) await shot(page, 'mobile-dark' + (r || '-home').replace('#', '-'));
+    if (['', '#g8-q25', '#g7-q34', '#g8b-q31', '#g8b-q33', '#n16-q31', '#obl-q23', '#obl-q34', '#obl-q37'].includes(r)) await shot(page, 'mobile-dark' + (r || '-home').replace('#', '-'));
   }
   // открыть разбор 8 класса на телефоне
   await page.goto(URL.replace(/#.*/, '') + '#g8-q3');
@@ -388,11 +393,81 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   if ((await page.inputValue('textarea.open-draft')) !== 'черновик ответа') fail('открытая задача: черновик не сохранился');
 
   await go('#kartochki-self');
-  if (!/Самопроверка · 20/.test(await page.textContent('.deck-bar'))) fail('в колоде самопроверки должно быть 20 карточек');
+  const nCards = await page.evaluate(() => window.OLYMPIAD_DATA.olympiads.reduce((a, o) => a + (o.cards || []).length, 0));
+  if (!new RegExp('Самопроверка · ' + nCards).test(await page.textContent('.deck-bar'))) fail('в колоде самопроверки должно быть ' + nCards + ' карточек');
   await go('#g8b-pamyatki');
   if ((await page.locator('.tab').count()) !== 4) fail('у олимпиады 2018/2019 должно быть 4 памятки');
   await page.click('.tab:has-text("Об этой олимпиаде")');
   if (!(await page.$eval('#note-panel img', (im) => im.complete && im.naturalWidth > 100))) fail('не загрузилась обложка олимпиады');
+}
+
+// --------------------------------------------------------------- 8. районный 2019, олимпиада 2016 и областной этап
+{
+  const { page } = await newPage();
+  const go = async (h) => { await page.goto(URL.replace(/#.*/, '') + h); await page.reload(); await page.waitForSelector('main'); };
+  const fresh = async (h) => { await go(h); if (await page.locator('[data-act="retry"]').count()) await page.click('[data-act="retry"]'); };
+
+  await go('#r19-q16'); // пункт 10 — номер «3»: подсказки по буквам у него быть не должно
+  if ((await page.locator('.hint-btn').count()) !== 5) fail('районный 2019, протисты: подсказки должны быть у 5 терминов из 6');
+
+  await go('#n16-q25'); // допустимый ответ «б» (физраствор) засчитывается с пояснением
+  await page.click('.opt[data-key="б"] .opt-card'); await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  if (!/Засчитано/.test(await page.textContent('.feedback'))) fail('2016, тест 25: нет пояснения к ответу «б»');
+
+  await go('#n16-q34'); // задача на тычинки: числовой ответ и подсказка на типичную ошибку
+  if (await page.locator('.hint-btn').count()) fail('2016, III.1: у числового ответа не должно быть подсказок по буквам');
+  await page.fill('#blank-n16-piii1-0', '255'); await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-bad');
+  if (!/бесплодны/.test(await page.textContent('.feedback'))) fail('2016, III.1: нет подсказки про бесплодные цветки василька');
+
+  await go('#obl-q22'); // порядок тканей: обратный порядок → подсказка; без запятых → засчитано
+  await page.fill('#blank-obl-q22-0', '5, 2, 3, 1, 4'); await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-bad');
+  if (!/начала снаружи/.test(await page.textContent('.feedback'))) fail('областной, 22: нет подсказки про направление');
+  await page.fill('#blank-obl-q22-0', '41325'); await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+
+  await go('#obl-q17'); // пункты с буквами: вариант, совпавший с отметками, подсвечивается
+  await page.click('.stmt[data-key="а"]'); await page.click('.stmt[data-key="в"]');
+  if (!(await page.locator('.opt[data-key="2"] .opt-match').count())) fail('областной, 17: вариант «а, в» не подсветился по отметкам');
+  if ((await page.locator('.opt-match').count()) !== 1) fail('областной, 17: подсветилось больше одного варианта');
+
+  await go('#obl-q19'); // аналоги/гомологи: пункты в условии списком, без черновика-отметок
+  if ((await page.locator('.stem-list li').count()) !== 5 || (await page.locator('.statements').count())) fail('областной, 19: пункты должны быть списком в условии');
+
+  await fresh('#obl-q28'); // задание с опечаткой в бланке: засчитан и набор без «раковины»
+  for (const k of ['1', '2', '5']) await page.click(`.opt[data-key="${k}"] .opt-card`);
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+
+  await fresh('#obl-q34'); // паукообразные: «мальпигиевы сосуды» засчитываются с пояснением
+  const a34 = { 'А': '4', 'Б': '5', 'В': '8', 'Г': '2', 'Д': '7', 'Е': '1', 'Ж': '1', 'З': '3' };
+  for (const [k, v] of Object.entries(a34)) await page.selectOption(`select[data-row="${k}"]`, v);
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  if (!/коксальные/.test(await page.textContent('.feedback'))) fail('областной, 34: нет пояснения про коксальные железы');
+
+  await go('#obl-q27'); // рисунок стрекозы из бланка
+  await page.waitForSelector('.cond-media img');
+  const ok27 = await page.waitForFunction(() => { const im = document.querySelector('.cond-media img'); return im && im.complete && im.naturalWidth > 300; }, null, { timeout: 5000 }).then(() => true).catch(() => false);
+  if (!ok27) fail('областной, 27: не загрузился рисунок');
+
+  await go('#obl-q23'); // открытое задание: ключ и рисунок-образец без штрафа
+  await page.click('#check-btn');
+  await page.waitForSelector('.drawer.is-open .answer-card');
+  if ((await page.locator('#drawer-inner .expl svg').count()) < 2) fail('областной, 23: нет рисунка-образца почки');
+
+  for (const oid of ['n16', 'obl']) {
+    await go(`#${oid}-pamyatki`);
+    if ((await page.locator('.tab').count()) !== 4) fail(`${oid}: должно быть 4 памятки`);
+    await page.click('.tab:has-text("Экспресс-шпаргалка")');
+    if (!(await page.locator('.spoiler').count())) fail(`${oid}: шпаргалка с ответами не спрятана под спойлер`);
+  }
+  await go('');
+  const homeTxt = await page.textContent('main');
+  if (!/шести олимпиад/.test(homeTxt)) fail('на главной не обновилось число олимпиад');
+  if (!/Областной этап/.test(homeTxt) || /Областной этап · ·/.test(homeTxt)) fail('карточка областного этапа подписана неверно');
 }
 
 await browser.close();

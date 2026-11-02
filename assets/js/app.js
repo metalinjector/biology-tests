@@ -207,7 +207,8 @@
   window.addEventListener('popstate', () => go(parseToken(location.hash), { push: false }));
 
   const olymp = () => OLY.find((o) => o.id === view.oid);
-  const olabel = (o) => `${o.grade} класс · ${o.year}`;
+  const olabel = (o) => o.label || `${o.grade} класс · ${o.year}`;
+  const ostage = (o) => [o.stage, o.year].filter(Boolean).join(' · ');
 
   // ------------------------------------------------------------ шапка
   function topbar(extra = '') {
@@ -263,7 +264,7 @@
       return `<article class="olymp-card">
         <div class="olymp-head">
           <div class="grade">${o.grade}<small>класс</small></div>
-          <div><h3>${esc(o.stage)} · ${esc(o.year)}</h3><p>${esc(o.subtitle.split(' · ').slice(2).join(' · ') || 'теоретическая часть')}</p></div>
+          <div><h3>${esc(ostage(o))}</h3><p>${esc(o.blurb || o.subtitle.split(' · ').slice(2).join(' · ') || 'теоретическая часть')}</p></div>
         </div>
         <div class="olymp-body">
           <ul class="olymp-facts">
@@ -285,14 +286,15 @@
       </article>`;
     }).join('');
 
-    const noteBlurb = { g7: ['Главные ловушки', 'Памятки, ключ ответов и правила разбора'], g8: ['Шпаргалка и словарь', 'Экспресс-шпаргалка, словарь корней, ключ'], g8b: ['Шпаргалка и словарь', 'Шпаргалка с ответами, словарь корней, карточки'] };
+    const noteBlurb = { g7: ['Главные ловушки', 'Памятки, ключ ответов и правила разбора'], g8: ['Шпаргалка и словарь', 'Экспресс-шпаргалка, словарь корней, ключ'], g8b: ['Шпаргалка и словарь', 'Шпаргалка с ответами, словарь корней, карточки'], r19: ['Шпаргалка и словарь', 'Шпаргалка, словарь корней, карточки, ключ'], n16: ['Шпаргалка и словарь', 'Шпаргалка с ответами, словарь корней, карточки'], obl: ['Шпаргалка и словарь', 'Шпаргалка с ответами, словарь корней, карточки'] };
+    const COUNT_GEN = ['', 'одной', 'двух', 'трёх', 'четырёх', 'пяти', 'шести', 'семи', 'восьми', 'девяти', 'десяти'];
     const noteExtras = OLY.map((o) => { const [b, t] = noteBlurb[o.id] || ['Памятки', 'Шпаргалка и ключ']; return `<button class="extra" data-act="notes" data-oid="${o.id}"><span class="tag">${esc(olabel(o))}</span><b>${b}</b><span>${t}</span></button>`; }).join('');
     app.innerHTML = topbar() + `<main class="wrap-wide${enterCls()}">
       <section class="hero">
         <div>
           <p class="eyebrow">Тренажёр по олимпиадам · биология <span style="white-space:nowrap">7–8 класс</span></p>
           <h1>Олимпиада <em>под&nbsp;микроскопом</em></h1>
-          <p class="hero-lead">Настоящие задания трёх олимпиад для 7–8 класса. Отвечай сама, а если ошибёшься — тренажёр подскажет, и можно раскрыть подробный разбор с рисунками, ловушками и приёмами запоминания.</p>
+          <p class="hero-lead">Настоящие задания ${COUNT_GEN[OLY.length] || OLY.length} олимпиад для 7–8 класса. Отвечай сама, а если ошибёшься — тренажёр подскажет, и можно раскрыть подробный разбор с рисунками, ловушками и приёмами запоминания.</p>
           <div class="hero-stats">
             <span class="chip-stat"><b>${doneQ}</b> из ${totalQ} заданий решено</span>
             <span class="chip-stat"><span class="star" style="display:inline-flex;width:16px;align-self:center">${I.star}</span><b>${allStars()}</b> звёзд собрано</span>
@@ -518,7 +520,7 @@
   const hintUsed = (q) => Object.values(store.hints[q.id] || {}).some((n) => n > 0);
   const clearQuestion = (q) => { delete store.answers[q.id]; delete store.hints[q.id]; delete work[q.id]; delete work['stmt:' + q.id]; delete work['key:' + q.id]; };
   function hintHTML(q, i, spec, locked) {
-    if (locked || !spec.word) return '';
+    if (locked || !spec.word || hintMax(spec.word) <= 0) return '';
     const n = hintCount(q, i);
     const shown = n ? `<span class="hint-letters">Начинается на «<b>${esc(hintLetters(spec.word, n))}</b>…»</span>` : '';
     const btn = n < hintMax(spec.word)
@@ -527,7 +529,7 @@
     return `<div class="hint-row">${btn}${shown}</div>`;
   }
   function textHintsHTML(q, locked) {
-    if (locked) return '';
+    if (locked || !q.blanks.some((b) => b.word && hintMax(b.word) > 0)) return '';
     const many = q.blanks.length > 1;
     return `<div class="hints">${q.blanks.map((b, i) => `<div class="hint-line">${many ? `<span class="hint-lbl">Пропуск ${i + 1}</span>` : ''}${hintHTML(q, i, b, locked)}</div>`).join('')}</div>`;
   }
@@ -558,8 +560,9 @@
       if (!solvedOrRev && !isMulti && tried.includes(o.key) && !checked) { cls = 'is-tried'; flag = 'было'; }
       let matchBadge = '';
       if (stmtSel && stmtSel.length && !solvedOrRev) {
-        const nums = (stripTags(o.html).match(/\d+/g) || []);
-        if (sameSet(nums, stmtSel)) matchBadge = '<span class="opt-match">= твои отметки</span>';
+        const skeys = q.statements.map((x) => x.key);
+        const nums = (stripTags(o.html).match(/\d+|[а-яё]/gi) || []).filter((t) => skeys.includes(t));
+        if (nums.length && sameSet(nums, stmtSel)) matchBadge = '<span class="opt-match">= твои отметки</span>';
       }
       return `<label class="opt ${cls}" data-key="${esc(o.key)}">
         <input type="${isMulti ? 'checkbox' : 'radio'}" name="${name}" value="${esc(o.key)}" ${checked ? 'checked' : ''} ${locked ? 'disabled' : ''} data-input="opt">
@@ -993,7 +996,7 @@
     app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap${enterCls()}">
       <div class="qhead"><h2><b>${esc(olabel(o))}</b> · итоги</h2><span class="qcount">${st.done} из ${st.total} вопросов</span></div>
       <section class="diploma">
-        <span class="kicker">${esc(o.stage)} · ${esc(o.year)} · ${o.grade} класс${finished ? '' : ' · промежуточный итог'}</span>
+        <span class="kicker">${esc(ostage(o))} · ${o.grade} класс${finished ? '' : ' · промежуточный итог'}</span>
         ${I.seal}
         <h2>${dip.t}</h2>
         <div class="who"><label for="who-name">Вручается</label><input id="who-name" data-input="name" value="${esc(store.name || '')}" placeholder="впиши своё имя" autocomplete="given-name"></div>
