@@ -7,6 +7,8 @@
   --surface: #ffffff;
   --surface-2: #f5f8f7;
   --frost: #e4ebe8;
+  --frost-7: #f5e7ec;   /* 7 класс: нежный розовый, как эозин рядом с метиленовым синим */
+  --grade-7: #b0395f;
   --ink: #13221e;
   --muted: #586a64;
   --line: #d2ddd9;
@@ -58,6 +60,8 @@
     --surface: #141e21;
     --surface-2: #19262a;
     --frost: #22313a;
+    --frost-7: #30262c;
+    --grade-7: #f19ab8;
     --ink: #e3ece9;
     --muted: #9cb0aa;
     --line: #2a3a3f;
@@ -82,6 +86,8 @@
   --surface: #141e21;
   --surface-2: #19262a;
   --frost: #22313a;
+  --frost-7: #30262c;
+  --grade-7: #f19ab8;
   --ink: #e3ece9;
   --muted: #9cb0aa;
   --line: #2a3a3f;
@@ -226,6 +232,8 @@ kbd { font-family: var(--font-mono); font-size: .85em; padding: 1px 6px; border-
 .grade small { display: block; font-family: var(--font-mono); font-size: .7rem; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin-top: 6px; }
 .olymp-head h3 { margin: 0 0 4px; font-size: 1.2rem; font-family: var(--font-display); font-weight: 700; }
 .olymp-head p { margin: 0; color: var(--muted); font-size: var(--step--1); }
+.olymp-card.g7 .olymp-head { background-color: var(--frost-7); }
+.olymp-card.g7 .grade { color: var(--grade-7); }
 .olymp-body { padding: 16px 20px 6px; display: grid; gap: 12px; align-content: start; }
 .olymp-facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0; padding: 0; list-style: none; font-size: var(--step--1); color: var(--muted); }
 .olymp-facts b { color: var(--ink); font-family: var(--font-mono); }

@@ -261,7 +261,7 @@
       const figs = o.flat.reduce((a, q) => a + ((q.explanation + q.media).match(/<svg|<img/g) || []).length, 0);
       const mistakes = o.main.filter((q) => ['bad', 'rev', 'ok2'].includes(status(q))).length;
       const started = st.done + st.bad > 0;
-      return `<article class="olymp-card">
+      return `<article class="olymp-card g${o.grade}">
         <div class="olymp-head">
           <div class="grade">${o.grade}<small>класс</small></div>
           <div><h3>${esc(ostage(o))}</h3><p>${esc(o.blurb || o.subtitle.split(' · ').slice(2).join(' · ') || 'теоретическая часть')}</p></div>
