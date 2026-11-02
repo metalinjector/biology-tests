@@ -178,7 +178,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
     await page.goto(URL.replace(/#.*/, '') + '#g7-q' + n);
     await page.reload();
     await page.waitForSelector('.cond-media img');
-    const okImg = await page.$eval('.cond-media img', (img) => img.complete && img.naturalWidth > 100);
+    const okImg = await page.waitForFunction(() => { const im = document.querySelector('.cond-media img'); return im && im.complete && im.naturalWidth > 100; }, null, { timeout: 5000 }).then(() => true).catch(() => false);
     if (!okImg) fail('не загрузилась картинка в вопросе ' + n);
   }
 }
@@ -189,7 +189,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   const routes = ['', '#g7-q1', '#g7-q22', '#g7-q34', '#g7-q35', '#g8-q2', '#g8-q25', '#g8-q26', '#g7-pamyatki', '#g8-pamyatki', '#kartochki-self', '#g8-itogi',
     '#g8b-q10', '#g8b-q15', '#g8b-q30', '#g8b-q31', '#g8b-q32', '#g8b-q33', '#g8b-q36', '#g8b-pamyatki',
     '#r19-q8', '#r19-q15', '#r19-q17', '#n16-q5', '#n16-q30', '#n16-q31', '#n16-q34', '#n16-q36', '#n16-pamyatki',
-    '#obl-q19', '#obl-q22', '#obl-q23', '#obl-q27', '#obl-q34', '#obl-q35', '#obl-q37', '#obl-q38', '#obl-pamyatki', '#obl-itogi'];
+    '#obl-q19', '#obl-q22', '#obl-q23', '#obl-q27', '#obl-q34', '#obl-q35', '#obl-q37', '#obl-q38', '#obl-pamyatki', '#obl-itogi', '#temy', '#tema-arth'];
   for (const r of routes) {
     await page.goto(URL.replace(/#.*/, '') + r);
     await page.reload();
@@ -197,7 +197,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
     await page.waitForTimeout(150);
     const over = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     if (over > 1) fail(`горизонтальная прокрутка на телефоне (${r || 'главная'}): +${over}px`);
-    if (['', '#g8-q25', '#g7-q34', '#g8b-q31', '#g8b-q33', '#n16-q31', '#obl-q23', '#obl-q34', '#obl-q37'].includes(r)) await shot(page, 'mobile-dark' + (r || '-home').replace('#', '-'));
+    if (['', '#g8-q25', '#g7-q34', '#g8b-q31', '#g8b-q33', '#n16-q31', '#obl-q23', '#obl-q34', '#obl-q37', '#temy'].includes(r)) await shot(page, 'mobile-dark' + (r || '-home').replace('#', '-'));
   }
   // открыть разбор 8 класса на телефоне
   await page.goto(URL.replace(/#.*/, '') + '#g8-q3');
@@ -468,6 +468,41 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   const homeTxt = await page.textContent('main');
   if (!/шести олимпиад/.test(homeTxt)) fail('на главной не обновилось число олимпиад');
   if (!/Областной этап/.test(homeTxt) || /Областной этап · ·/.test(homeTxt)) fail('карточка областного этапа подписана неверно');
+}
+
+// --------------------------------------------------------------- 9. тренировка по темам
+{
+  const { page } = await newPage();
+  const go = async (h) => { await page.goto(URL.replace(/#.*/, '') + h); await page.reload(); await page.waitForSelector('main'); };
+  await go('');
+  await page.click('[data-act="topics"]');
+  await page.waitForSelector('.topic-card');
+  const info = await page.evaluate(() => {
+    const D = window.OLYMPIAD_DATA;
+    const n = D.olympiads.reduce((a, o) => a + o.sections.reduce((b, s) => b + s.questions.length, 0), 0);
+    const tagged = D.olympiads.reduce((a, o) => a + o.sections.reduce((b, s) => b + s.questions.filter((q) => q.theme).length, 0), 0);
+    return { themes: D.themes.length, n, tagged, chips: document.querySelectorAll('.topic-card .qdot').length, cards: document.querySelectorAll('.topic-card').length };
+  });
+  if (info.cards !== info.themes) fail(`темы: карточек ${info.cards}, а тем ${info.themes}`);
+  if (info.tagged !== info.n || info.chips !== info.n) fail(`темы: у ${info.tagged} из ${info.n} вопросов есть тема, номеров на странице ${info.chips}`);
+  await page.click('.topic-card#tema-prot [data-act="topic-start"]');
+  await page.waitForSelector('main[data-qid]');
+  const first = await page.getAttribute('main', 'data-qid');
+  if (!/Тема «Протисты» · 1 \/ /.test(await page.textContent('.qcount'))) fail('темы: нет счётчика темы в вопросе');
+  const listLen = await page.evaluate(() => window.OLYMPIAD_DATA.olympiads.flatMap((o) => o.sections.flatMap((s) => s.questions)).filter((q) => q.theme === 'prot').length);
+  const seen = new Set([first]);
+  for (let k = 1; k < listLen; k++) {
+    await page.click('[data-act="skip"]');
+    await page.waitForFunction((prev) => document.querySelector('main')?.dataset.qid && !prev.includes(document.querySelector('main').dataset.qid), [...seen]);
+    seen.add(await page.getAttribute('main', 'data-qid'));
+  }
+  if (seen.size !== listLen) fail(`темы: пройдено ${seen.size} вопросов из ${listLen}`);
+  const olys = new Set([...seen].map((x) => x.split('-')[0]));
+  if (olys.size < 3) fail('темы: вопросы темы должны идти из разных олимпиад');
+  await page.click('[data-act="skip"]');
+  await page.waitForSelector('.topic-card.is-focus#tema-prot');
+  await go('#tema-vert');
+  if (!(await page.locator('.topic-card.is-focus#tema-vert').count())) fail('темы: ссылка на тему не открывается');
 }
 
 await browser.close();

@@ -161,7 +161,10 @@
   }
 
   // ------------------------------------------------------------ навигация
-  const view = { screen: 'home', oid: null, idx: 0, noteId: null, deck: null, queue: null };
+  const view = { screen: 'home', oid: null, idx: 0, noteId: null, deck: null, queue: null, topic: null, tq: null };
+  const THEMES = DATA.themes || [];
+  const themeQs = (id) => OLY.flatMap((o) => o.flat.filter((q) => q.theme === id));
+  const themeTitle = (id) => (THEMES.find((t) => t.id === id) || {}).title || '';
   let leaveHook = null;
   let entering = true; // анимация появления — только при смене экрана, не при перерисовке
   const enterCls = () => (entering ? ' screen' : '');
@@ -172,6 +175,7 @@
       case 'results': return `${view.oid}-itogi`;
       case 'notes': return `${view.oid}-pamyatki`;
       case 'cards': return `kartochki-${view.deck}`;
+      case 'topics': return view.topic ? `tema-${view.topic}` : 'temy';
       default: return '';
     }
   }
@@ -184,12 +188,15 @@
     if ((m = t.match(/^([a-z0-9]+)-itogi$/)) && known(m[1])) return { screen: 'results', oid: m[1] };
     if ((m = t.match(/^([a-z0-9]+)-pamyatki$/)) && known(m[1])) return { screen: 'notes', oid: m[1] };
     if ((m = t.match(/^kartochki-(self|dict)$/))) return { screen: 'cards', deck: m[1] };
+    if (t === 'temy') return { screen: 'topics', topic: null };
+    if ((m = t.match(/^tema-([a-z]+)$/)) && THEMES.some((x) => x.id === m[1])) return { screen: 'topics', topic: m[1] };
     return { screen: 'home' };
   }
   function go(next, { push = true, scroll = true } = {}) {
     const run = () => {
       if (leaveHook) { leaveHook(); leaveHook = null; }
-      Object.assign(view, { noteId: null, queue: view.screen === 'quiz' && next.screen === 'quiz' && next.oid === view.oid ? view.queue : null }, next);
+      Object.assign(view, { noteId: null, queue: view.screen === 'quiz' && next.screen === 'quiz' && next.oid === view.oid ? view.queue : null,
+        tq: view.screen === 'quiz' && next.screen === 'quiz' ? view.tq : null }, next);
       if (view.oid && !OLY.find((o) => o.id === view.oid)) view.screen = 'home';
       entering = !document.startViewTransition || reducedMotion();
       render();
@@ -316,6 +323,7 @@
 
       <h2 class="section-title">Повторить и запомнить</h2>
       <div class="extras">
+        <button class="extra extra-topics" data-act="topics"><span class="tag">по темам</span><b>Тренировка по темам</b><span>${THEMES.length} тем: задания всех олимпиад по одной теме подряд</span></button>
         <button class="extra" data-act="cards" data-deck="self"><span class="tag">карточки</span><b>Самопроверка</b><span>${deckCards('self').length} вопросов-карточек: переверни и проверь себя</span></button>
         <button class="extra" data-act="cards" data-deck="dict"><span class="tag">карточки</span><b>Корни терминов</b><span>${deckCards('dict').length} терминов: откуда слово и что значит</span></button>
         ${noteExtras}
@@ -695,9 +703,12 @@
 
     const queue = view.queue;
     const pos = queue ? queue.indexOf(view.idx) : -1;
+    const tpos = view.tq ? view.tq.list.indexOf(q.id) : -1;
+    const inTopic = tpos >= 0;
     const counter = queue && pos >= 0
       ? `Работа над ошибками · ${pos + 1} / ${queue.length}`
-      : `Вопрос ${view.idx + 1} / ${o.flat.length}`;
+      : inTopic ? `Тема «${themeTitle(view.tq.id)}» · ${tpos + 1} / ${view.tq.list.length}`
+        : `Вопрос ${view.idx + 1} / ${o.flat.length}`;
 
     const map = o.sections.map((s) => `<div class="qmap-sec"><span>${esc(s.short)}</span><div class="qmap-dots">${s.questions.map((qq) => {
       const s2 = status(qq);
@@ -732,14 +743,15 @@
         : `<button class="btn btn-primary" data-act="check" id="check-btn">Показать ключ</button>
            <button class="btn btn-ghost" data-act="skip">Пропустить</button>`)
       : locked
-      ? `<button class="btn btn-primary" data-act="next">${view.idx < o.flat.length - 1 || queue ? 'Следующий вопрос' : 'К итогам'}${I.next}</button>
+      ? `<button class="btn btn-primary" data-act="next">${view.idx < o.flat.length - 1 || queue || inTopic ? 'Следующий вопрос' : 'К итогам'}${I.next}</button>
          <button class="btn btn-ghost" data-act="retry">Решить заново</button>`
       : `<button class="btn btn-primary" data-act="check" id="check-btn">Проверить</button>
          <button class="btn btn-ghost" data-act="skip">Пропустить</button>
          <span class="grow"></span><span class="kbd-hint"><kbd>Enter</kbd> проверить · <kbd>←</kbd><kbd>→</kbd> листать</span>`;
 
     const yourStars = solved ? r.stars : 0;
-    app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap${enterCls()}" data-qid="${q.id}">
+    app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`
+      + (inTopic ? `<button class="btn btn-sm btn-ghost" data-act="topics" data-topic="${view.tq.id}"><span class="lbl">Темы</span></button>` : '')) + `<main class="wrap${enterCls()}" data-qid="${q.id}">
       <div class="qhead"><h2><b>${esc(olabel(o))}</b> · ${esc(q.sec.title)}</h2>
         <div class="qhead-tools">
           <label class="switch" title="Разрешить открывать разбор и ответ до того, как ответишь">
@@ -765,7 +777,7 @@
       </article>
       ${drawerHTML(q)}
       <nav class="pager">
-        <button class="btn btn-ghost" data-act="prev" ${view.idx === 0 && !queue ? 'disabled' : ''}>${I.back}Назад</button>
+        <button class="btn btn-ghost" data-act="prev" ${view.idx === 0 && !queue && !inTopic ? 'disabled' : ''}>${I.back}Назад</button>
         <button class="btn btn-ghost" data-act="results" data-oid="${o.id}">Итоги · ★ ${st.stars}</button>
         <button class="btn btn-ghost" data-act="next">Вперёд${I.next}</button>
       </nav>
@@ -960,6 +972,16 @@
   function move(delta) {
     const o = olymp();
     lastEval = null; drawerOpen = false;
+    if (view.tq) {
+      const tp = view.tq.list.indexOf(o.flat[view.idx].id);
+      if (tp >= 0) {
+        const np = tp + delta;
+        if (np >= view.tq.list.length) { toast('Тема пройдена до конца!'); return go({ screen: 'topics', topic: view.tq.id }); }
+        if (np < 0) return;
+        const nq = byId[view.tq.list[np]];
+        return go({ screen: 'quiz', oid: nq.olymp.id, idx: nq.index, queue: null, tq: view.tq }, { push: false });
+      }
+    }
     if (view.queue) {
       const pos = view.queue.indexOf(view.idx);
       const np = pos + delta;
@@ -1070,12 +1092,43 @@
   }
 
   // ------------------------------------------------------------ рендер
+  // ------------------------------------------------------------ тренировка по темам
+  function renderTopics() {
+    const dot = { ok: 'is-ok', ok2: 'is-ok2', bad: 'is-bad', rev: 'is-rev', none: '' };
+    const total = THEMES.reduce((a, t) => a + themeQs(t.id).length, 0);
+    const cards = THEMES.map((t) => {
+      const qs = themeQs(t.id);
+      const done = qs.filter((q) => ['ok', 'ok2'].includes(status(q))).length;
+      const rows = OLY.map((o) => {
+        const g = qs.filter((q) => q.olymp === o);
+        if (!g.length) return '';
+        return `<div class="tg-row"><span class="tg-ol">${esc(olabel(o))}</span><div class="tg-chips">${g.map((q) =>
+          `<button class="qdot ${dot[status(q)]}" data-act="topic-q" data-topic="${t.id}" data-qid="${q.id}" title="${esc(qLabel(q))}${q.sec.bonus ? ' (бонус)' : ''}">${q.sec.bonus ? 'б' : ''}${esc(q.num)}</button>`).join('')}</div></div>`;
+      }).join('');
+      const label = done === qs.length && qs.length ? 'Пройти заново' : done ? 'Продолжить' : 'Решать по порядку';
+      return `<article class="topic-card${view.topic === t.id ? ' is-focus' : ''}" id="tema-${t.id}">
+        <div class="topic-head"><h3>${esc(t.title)}</h3><span class="tabnum">${done} / ${qs.length}</span></div>
+        <p class="topic-blurb">${esc(t.blurb)}</p>
+        <div class="meter" role="img" aria-label="Решено ${done} из ${qs.length}"><span class="m-ok" style="width:${qs.length ? (100 * done) / qs.length : 0}%"></span></div>
+        ${rows}
+        <div><button class="btn btn-primary btn-sm" data-act="topic-start" data-topic="${t.id}">${label}${I.next}</button></div>
+      </article>`;
+    }).join('');
+    app.innerHTML = topbar(`<button class="btn btn-sm btn-ghost" data-act="home">${I.back}<span class="lbl">Олимпиады</span></button>`) + `<main class="wrap-wide${enterCls()}">
+      <div class="qhead"><h2><b>Тренировка по темам</b></h2><span class="qcount">${THEMES.length} тем · ${total} вопросов</span></div>
+      <p class="topics-lead">Одна и та же идея часто проверяется в разных олимпиадах по-разному. Здесь задания всех олимпиад собраны по темам: решай подряд, и после каждого ответа открывай разбор — так связи между заданиями видны лучше всего. Цвет номера — как в карте вопросов: зелёный — с первой попытки, жёлтый — не сразу, красный — с ошибкой. Буква «б» — бонусная задача тренажёра.</p>
+      <div class="topic-grid">${cards}</div>
+    </main>`;
+    if (view.topic) document.getElementById('tema-' + view.topic)?.scrollIntoView({ block: 'start' });
+  }
+
   function render() {
     switch (view.screen) {
       case 'quiz': renderQuiz(); break;
       case 'results': renderResults(); break;
       case 'notes': renderNotes(); break;
       case 'cards': renderCards(); break;
+      case 'topics': renderTopics(); break;
       default: renderHome();
     }
   }
@@ -1113,6 +1166,18 @@
       case 'note': view.noteId = el.dataset.note; renderNotes(); break;
       case 'spoil': view['spoil:' + el.dataset.note] = true; renderNotes(); break;
       case 'cards': go({ screen: 'cards', deck: el.dataset.deck }); break;
+      case 'topics': lastEval = null; drawerOpen = false; go({ screen: 'topics', topic: el.dataset.topic || null }); break;
+      case 'topic-start':
+      case 'topic-q': {
+        const id = el.dataset.topic;
+        const list = themeQs(id).map((x) => x.id);
+        if (!list.length) break;
+        const first = el.dataset.qid || list.find((x) => !['ok', 'ok2'].includes(status(byId[x]))) || list[0];
+        const tq0 = byId[first];
+        lastEval = null; drawerOpen = false;
+        go({ screen: 'quiz', oid: tq0.olymp.id, idx: tq0.index, queue: null, tq: { id, list } });
+        break;
+      }
       case 'goto': {
         const q = byId[el.dataset.qid];
         lastEval = null; drawerOpen = false;
