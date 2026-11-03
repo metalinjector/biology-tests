@@ -18,6 +18,7 @@
 | [8-klass-oblastnoy-avtorsky-razbor-1.md](8-klass-oblastnoy-avtorsky-razbor-1.md) | Областной этап, 8 класс — Областной этап · 8 класс · 36 заданий части I и 2 задания части II | 42 |
 | [8-klass-oblastnoy-avtorsky-razbor-2.md](8-klass-oblastnoy-avtorsky-razbor-2.md) | Областной этап, 8 класс — Областной этап · 8 класс · 36 заданий части I и 2 задания части II | 42 |
 | [keys.md](keys.md) | сводная таблица ключей всех олимпиад | 203 |
+| [analiz-otvetov-8-klass.md](analiz-otvetov-8-klass.md) | Анализ ответов по биологии, 8 класс | — |
 
 PDF с рисунками и схемами — в папке [pdf/](pdf/) (по одному файлу на олимпиаду).
 

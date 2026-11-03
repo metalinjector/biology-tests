@@ -448,6 +448,13 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   await page.waitForSelector('.feedback.fb-ok');
   if (!/коксальные/.test(await page.textContent('.feedback'))) fail('областной, 34: нет пояснения про коксальные железы');
 
+  await fresh('#obl-q37'); // суждение 7 (киль у летучих мышей): засчитывается и «+»
+  const a37 = { 1: '-', 2: '+', 3: '+', 4: '+', 5: '+', 6: '-', 7: '+', 8: '-', 9: '-' };
+  for (const [k, v] of Object.entries(a37)) await page.click(`.seg button[data-row="${k}"][data-val="${v}"]`);
+  await page.click('#check-btn');
+  await page.waitForSelector('.feedback.fb-ok');
+  if (!/килевую/.test(await page.textContent('.feedback'))) fail('областной, II.1: нет пояснения к ответу «+» в суждении 7');
+
   await go('#obl-q27'); // рисунок стрекозы из бланка
   await page.waitForSelector('.cond-media img');
   const ok27 = await page.waitForFunction(() => { const im = document.querySelector('.cond-media img'); return im && im.complete && im.naturalWidth > 300; }, null, { timeout: 5000 }).then(() => true).catch(() => false);

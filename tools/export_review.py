@@ -319,8 +319,10 @@ def olympiad_label(o):
 def main():
     data = load()
     OUT.mkdir(exist_ok=True)
+    # удаляем только то, что этот скрипт создаёт сам; отчёты проверки (analiz-*.md) не трогаем
     for f in OUT.glob("*.md"):
-        f.unlink()
+        if f.name in ("keys.md", "README.md") or any(f.name.startswith(stem) for stem in FILE_NAMES.values()):
+            f.unlink()
     index, key_rows, images = [], [], {}
     total = 0
     for o in data["olympiads"]:
@@ -377,7 +379,11 @@ def main():
     for o, n, names in index:
         for nm in names:
             rd.append(f"| [{nm}]({nm}) | {olympiad_label(o)} | {n} |")
-    rd += ["| [keys.md](keys.md) | сводная таблица ключей всех олимпиад | " + str(total) + " |", "",
+    rd.append("| [keys.md](keys.md) | сводная таблица ключей всех олимпиад | " + str(total) + " |")
+    for rep in sorted(OUT.glob("analiz-*.md")):
+        first = rep.read_text(encoding="utf-8").splitlines()[0].lstrip("# ").strip()
+        rd.append(f"| [{rep.name}]({rep.name}) | {first} | — |")
+    rd += ["",
            "PDF с рисунками и схемами — в папке [pdf/](pdf/) (по одному файлу на олимпиаду).", "",
            "Прямые ссылки на текст (для ИИ, который умеет открывать ссылки):", ""]
     for o, n, names in index:
