@@ -1471,7 +1471,7 @@
 
 ![g7-socvetiya.png](../assets/img/g7-socvetiya.png)
 (файл: `assets/img/g7-socvetiya.png`, ссылка: https://raw.githubusercontent.com/metalinjector/biology-tests/claude/intelligent-heisenberg-9woyvy/assets/img/g7-socvetiya.png)
-*Рисунок из условия: схемы соцветий 1–15*
+*Рисунок из условия: схемы соцветий 1–15. На скане бледно пропечатаны номера 1, 7 и 8; порядок такой: верхний ряд слева направо — 1–6, средний — 7–11, нижний — 12–15.*
 
 **5.1.** Впишите в таблицу матрицы ответов названия соцветий.
 

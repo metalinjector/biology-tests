@@ -869,10 +869,35 @@
     (r.tried || []).forEach((k) => inner.querySelectorAll(`.expl [data-opt="${CSS.escape(k)}"]`).forEach((el) => el.classList.add('is-picked')));
     inner.querySelectorAll('.blk').forEach((b) => { const c = [...b.classList].find((x) => BLOCK_NAMES[x]); if (c) b.id = `${q.id}-${c}`; });
     inner.querySelectorAll('.expl img').forEach((img) => { img.loading = 'lazy'; });
+    fitSvgs(inner);
     if (animate) {
       const d = document.getElementById('drawer');
       setTimeout(() => d.scrollIntoView({ behavior: reducedMotion() ? 'auto' : 'smooth', block: 'start' }), 120);
     }
+  }
+
+  // Подписи в схемах иногда шире, чем рассчитывал автор рисунка (на устройстве другой шрифт).
+  // Расширяем viewBox ровно настолько, чтобы текст не обрезался, — сама схема не меняется.
+  function fitSvgs(root) {
+    const run = () => root.querySelectorAll('svg[viewBox]').forEach((svg) => {
+      try {
+        if (!svg.dataset.vb0) svg.dataset.vb0 = svg.getAttribute('viewBox');
+        const [x, y, w, h] = svg.dataset.vb0.split(/[\s,]+/).map(Number);
+        const bb = svg.getBBox();
+        if (!bb.width || !w || !h) return;
+        const pad = 3;
+        const lim = (v, m) => Math.min(v, m * 0.15);
+        const l = lim(Math.max(0, x - bb.x + pad), w), r = lim(Math.max(0, bb.x + bb.width - (x + w) + pad), w);
+        const t = lim(Math.max(0, y - bb.y + pad), h), btm = lim(Math.max(0, bb.y + bb.height - (y + h) + pad), h);
+        const need = (v) => v > pad + 0.5;
+        if (![l, r, t, btm].some(need)) { svg.setAttribute('viewBox', svg.dataset.vb0); return; }
+        const nl = need(l) ? l : 0, nr = need(r) ? r : 0, nt = need(t) ? t : 0, nb = need(btm) ? btm : 0;
+        svg.setAttribute('viewBox', `${x - nl} ${y - nt} ${w + nl + nr} ${h + nt + nb}`);
+        svg.dataset.fitted = '1';
+      } catch (e) { /* схема ещё не отрисована — пропускаем */ }
+    });
+    run();
+    if (document.fonts && document.fonts.status !== 'loaded') document.fonts.ready.then(run);
   }
 
   function setDrawer(open) {

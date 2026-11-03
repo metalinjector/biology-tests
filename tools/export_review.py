@@ -235,6 +235,10 @@ def key_md(q):
         for i, it in enumerate(q["items"]):
             lines.append(f"- пункт {it.get('key', i + 1)}: {plain(it.get('html', ''))} → **{it.get('word')}** "
                          f"(принимаются шаблоны {it['accept']})")
+            for h in it.get("near") or []:
+                lines.append(f"  - почти верно (засчитывается с замечанием) `{h['re']}`: {h['msg']}")
+            for h in it.get("hints") or []:
+                lines.append(f"  - подсказка на ответ по шаблону `{h['re']}`: {h['msg']}")
     elif t == "table":
         cols = {c["key"]: plain(c.get("label") or c.get("html") or c["key"]) for c in q["columns"]}
         for r in q["rows"]:
@@ -419,7 +423,10 @@ h1 { font-size: 18pt; margin: 0 0 6pt; } .sub { color: #5b6b66; margin: 0 0 14pt
 .key { background: #e8f4ec; border-color: #2f7a3b; } .ans { background: #f3f6f5; }
 .lbl { font-weight: 700; font-size: 9pt; text-transform: uppercase; letter-spacing: .04em; color: #2153c0; }
 img { max-width: 100%; max-height: 210mm; } figure { margin: 6pt 0; } figcaption { font-size: 9pt; color: #5b6b66; }
-svg { max-width: 100%; height: auto; } svg text { font-family: "Noto Sans", "DejaVu Sans", sans-serif; }
+svg { max-width: 100%; height: auto; }
+/* шрифты схем — как на сайте (assets/css/app.css) */
+.src-g8 svg, .src-g8b svg, .src-r19 svg, .src-n16 svg, .src-obl svg { font-family: "Golos Text", "Noto Sans", sans-serif; }
+.src-g8b svg text, .src-n16 svg text, .src-obl svg text { font-family: "Noto Sans", sans-serif; }
 table { border-collapse: collapse; margin: 4pt 0; font-size: 9.5pt; } td, th { border: 1px solid #c9d3cf; padding: 2pt 5pt; vertical-align: top; }
 .blk { margin: 8pt 0; } .bl { font-weight: 700; color: #2153c0; margin-bottom: 3pt; } .bn { margin-right: 4pt; }
 .rule { border-left: 3px solid #c2410c; padding-left: 6pt; } .rule-ic { display: none; }
@@ -505,6 +512,12 @@ def make_pdfs(data):
         "  for (let i = 4; i < process.argv.length; i += 2) {\n"
         "    await p.goto('file://' + process.argv[i], { waitUntil: 'load' });\n"
         "    await p.waitForFunction(() => [...document.images].every((im) => im.complete && im.naturalWidth > 0), null, { timeout: 60000 });\n"
+        "    await p.evaluate(async () => { await document.fonts.ready; document.querySelectorAll('svg[viewBox]').forEach((svg) => {\n"
+        "      try { const [x, y, w, h] = svg.getAttribute('viewBox').split(/[\\s,]+/).map(Number); const bb = svg.getBBox(); if (!bb.width) return;\n"
+        "        const lim = (v, m) => Math.min(Math.max(0, v), m * 0.15); const pad = 3;\n"
+        "        const l = lim(x - bb.x + pad, w), r = lim(bb.x + bb.width - x - w + pad, w), t = lim(y - bb.y + pad, h), b2 = lim(bb.y + bb.height - y - h + pad, h);\n"
+        "        const n = (v) => (v > pad + 0.5 ? v : 0); if (n(l) + n(r) + n(t) + n(b2) === 0) return;\n"
+        "        svg.setAttribute('viewBox', `${x - n(l)} ${y - n(t)} ${w + n(l) + n(r)} ${h + n(t) + n(b2)}`); } catch (e) {} }); });\n"
         "    await p.pdf({ path: process.argv[i + 1], format: 'A4', printBackground: true,\n"
         "      margin: { top: '14mm', bottom: '14mm', left: '13mm', right: '13mm' } });\n"
         "  }\n  await b.close(); })();\n", encoding="utf-8")
