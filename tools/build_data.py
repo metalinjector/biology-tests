@@ -1466,6 +1466,11 @@ def build_r19():
             fig = f'<figure class="cond-figure">{inner(orig)}<figcaption>' + (
                 "Рисунок из бланка: листья А, Б и В (полная копия из PDF-бланка; в разборе рисунок был обрезан справа)."
                 if qn == 15 else "Рисунки 1–4 из бланка.") + "</figcaption></figure>"
+            if qn == 16:
+                fig += ('<figure class="cond-figure"><img src="assets/img/r19-ch2-protisty-pdf.png" loading="lazy" '
+                        'alt="Рисунки 2–4 крупнее: инфузория-туфелька, эвглена зелёная, цикл малярийного плазмодия">'
+                        '<figcaption>Те же рисунки 2–4 крупнее — чёткая копия из PDF-бланка (на ней лучше видны цифры).'
+                        '</figcaption></figure>')
             q["media"] = str(frag(fig, qid + "m"))
             if qn == 16:
                 fixed = q["answerHtml"].replace("<td><strong>порошица</strong></td>",

@@ -188,7 +188,7 @@ const shot = async (page, name) => { if (SHOTS) await page.screenshot({ path: pa
   const { page } = await newPage({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: 'dark' });
   const routes = ['', '#g7-q1', '#g7-q22', '#g7-q34', '#g7-q35', '#g8-q2', '#g8-q25', '#g8-q26', '#g7-pamyatki', '#g8-pamyatki', '#kartochki-self', '#g8-itogi',
     '#g8b-q10', '#g8b-q15', '#g8b-q30', '#g8b-q31', '#g8b-q32', '#g8b-q33', '#g8b-q36', '#g8b-pamyatki',
-    '#r19-q8', '#r19-q15', '#r19-q17', '#n16-q5', '#n16-q30', '#n16-q31', '#n16-q34', '#n16-q36', '#n16-pamyatki',
+    '#r19-q8', '#r19-q15', '#r19-q16', '#r19-q17', '#n16-q5', '#n16-q30', '#n16-q31', '#n16-q34', '#n16-q36', '#n16-pamyatki',
     '#obl-q19', '#obl-q22', '#obl-q23', '#obl-q27', '#obl-q34', '#obl-q35', '#obl-q37', '#obl-q38', '#obl-pamyatki', '#obl-itogi', '#temy', '#tema-arth'];
   for (const r of routes) {
     await page.goto(URL.replace(/#.*/, '') + r);
